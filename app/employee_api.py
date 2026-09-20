@@ -23,7 +23,7 @@ from app.models.user import User
 
 router = APIRouter(prefix="/employees", tags=["Employees"])
 PII_FIELDS = ("first_name", "last_name", "date_of_birth", "personal_email",
-              "work_email", "phone_number", "residential_address")
+              "work_email", "phone_number", "residential_address", "employee_photo")
 
 
 def lock_employee_writes(db):
@@ -50,7 +50,7 @@ def plaintext(employee, ring):
     values = {column.name: getattr(employee, column.name) for column in Employee.__table__.columns if column.name != "deleted_at"}
     try:
         for field in PII_FIELDS:
-            values[field] = ring.decrypt(json.loads(values[field]))
+            values[field] = ring.decrypt(json.loads(values[field])) if values[field] is not None else None
     except (KeyError, ValueError, TypeError, InvalidTag):
         raise HTTPException(503, "Employee data could not be decrypted with the configured keys") from None
     return values
@@ -100,7 +100,7 @@ def storage_values(payload, ring):
     values = payload.model_dump()
     encoded = payload.model_dump(mode="json")
     for field in PII_FIELDS:
-        values[field] = json.dumps(ring.encrypt(encoded[field]))
+        values[field] = json.dumps(ring.encrypt(encoded[field])) if encoded[field] is not None else None
     return values
 
 
@@ -208,6 +208,7 @@ def update_employee(
             "personal_email",
             "phone_number",
             "residential_address",
+            "employee_photo",
         }
         if not data.model_fields_set.issubset(allowed_fields):
             raise HTTPException(403, "You can only update your personal contact details")

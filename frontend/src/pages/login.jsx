@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../api";
 
 function Login() {
@@ -10,6 +10,7 @@ function Login() {
 
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
 
   function handleChange(event) {
     setForm({
@@ -70,6 +71,7 @@ function Login() {
           <p className="auth-subtitle">Enter your account details to continue.</p>
 
           {error && <p className="error-message">{error}</p>}
+          {location.state?.message && <p className="success-message">{location.state.message}</p>}
 
           <label htmlFor="username">Username</label>
           <input
@@ -95,6 +97,8 @@ function Login() {
           />
 
           <button type="submit">Sign in</button>
+
+          <p className="auth-switch"><Link to="/forgot-password">Forgot password?</Link></p>
 
           <p className="auth-switch">
             New employee? <Link to="/register">Create an account</Link>

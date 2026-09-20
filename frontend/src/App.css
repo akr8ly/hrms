@@ -255,6 +255,26 @@ main {
   border-radius: 9px;
 }
 
+.success-message {
+  margin: -10px 0 20px;
+  padding: 11px 13px;
+  color: #166534;
+  font-size: 14px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 9px;
+}
+
+.photo-preview,
+.profile-photo {
+  width: 96px;
+  height: 96px;
+  margin: 4px 0 20px;
+  object-fit: cover;
+  border: 3px solid #e0f2fe;
+  border-radius: 50%;
+}
+
 .page-header {
   display: flex;
   align-items: flex-start;
@@ -310,6 +330,77 @@ main {
   color: #64748b;
   line-height: 1.6;
 }
+
+.wide-card {
+  max-width: 980px;
+}
+
+.endpoint-list,
+.user-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.endpoint-row {
+  display: grid;
+  grid-template-columns: 150px minmax(240px, 1fr) minmax(160px, 0.7fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+}
+
+.endpoint-row strong {
+  color: #0369a1;
+  font-size: 12px;
+}
+
+.endpoint-row small,
+.user-row small {
+  color: #64748b;
+}
+
+.user-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 100px auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.user-row > div {
+  display: grid;
+  gap: 4px;
+}
+
+.user-row button {
+  padding: 8px 12px;
+  color: #fff;
+  background: #0284c7;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.user-row .reject-button {
+  background: #b42318;
+}
+
+.status {
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+
+.status.pending { color: #a16207; }
+.status.approved { color: #15803d; }
+.status.rejected { color: #b42318; }
 
 @media (max-width: 600px) {
   .auth-card {

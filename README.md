@@ -35,4 +35,6 @@ The portal runs at `http://localhost:5173`. Set `VITE_API_BASE_URL` in `frontend
 - Employee accesses their linked employee profile.
 - Query has read-only employee access with PII hidden.
 
-Passwords are Argon2 hashed. Employee PII uses AES-256-GCM envelopes with a key ID, nonce, ciphertext and authentication tag. Keep `.env` private and use `.env.example` only as a template.
+New Employee and Query registrations remain pending until an Admin approves them from the dashboard. Passwords must contain 7-15 characters, at least one digit and at least one special character. Password recovery uses the verification question and hashed answer created during registration.
+
+Passwords and verification answers are Argon2 hashed. Employee PII, including optional profile photos, uses AES-256-GCM envelopes with a key ID, nonce, ciphertext and authentication tag. Photos accept JPEG, PNG or WebP data up to 2 MB. Keep `.env` private and use `.env.example` only as a template.

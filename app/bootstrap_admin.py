@@ -1,6 +1,6 @@
 from getpass import getpass
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, field_validator
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
@@ -14,7 +14,17 @@ class AdminSetup(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     username: str = Field(min_length=3, max_length=50, pattern=r"^[A-Za-z0-9_]+$")
-    password: SecretStr = Field(min_length=15, max_length=128)
+    password: SecretStr = Field(min_length=7, max_length=15)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_policy(cls, password: SecretStr):
+        value = password.get_secret_value()
+        if not any(character.isdigit() for character in value):
+            raise ValueError("Password must contain at least one digit")
+        if not any(not character.isalnum() for character in value):
+            raise ValueError("Password must contain at least one special character")
+        return password
 
 
 def create_first_admin(db, data):
@@ -28,7 +38,7 @@ def create_first_admin(db, data):
     if db.scalar(select(User.id).where(User.username == data.username).execution_options(include_deleted=True)) is not None:
         raise ValueError("Choose a new username; existing accounts are not promoted by setup")
     user = User(username=data.username, password_hash=hash_password(data.password.get_secret_value()),
-                role_id=role.id, employee_id=None)
+                role_id=role.id, employee_id=None, approval_status="approved")
     db.add(user)
     try:
         db.commit()
@@ -47,7 +57,7 @@ def main():
     try:
         data = AdminSetup(username=username, password=password)
     except ValidationError:
-        raise SystemExit("Use a 3-50 character username (letters, digits, underscores) and a 15-128 character password") from None
+        raise SystemExit("Use a valid username and a 7-15 character password with a digit and special character") from None
     try:
         with SessionLocal() as db:
             user = create_first_admin(db, data)

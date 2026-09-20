@@ -15,6 +15,10 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, stored_hash: str) -> bool:
     return password_hasher.verify(password, stored_hash)
 
+
+def normalize_security_answer(answer: str) -> str:
+    return " ".join(answer.casefold().strip().split())
+
 class AuthSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",

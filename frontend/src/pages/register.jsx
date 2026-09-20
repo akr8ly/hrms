@@ -7,6 +7,8 @@ function Register() {
     username: "",
     password: "",
     role: "employee",
+    security_question: "birthplace",
+    security_answer: "",
   });
 
   const [employee, setEmployee] = useState({
@@ -18,6 +20,7 @@ function Register() {
     work_email: "",
     phone_number: "",
     residential_address: "",
+    employee_photo: null,
     date_of_joining: "",
     employment_type: "intern",
     employment_status: "active",
@@ -76,6 +79,22 @@ function Register() {
     }));
   }
 
+  function handlePhotoChange(event) {
+    const file = event.target.files[0];
+    if (!file) {
+      setEmployee((current) => ({ ...current, employee_photo: null }));
+      return;
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      setError("Photo must be a JPEG, PNG or WebP file up to 2 MB");
+      event.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setEmployee((current) => ({ ...current, employee_photo: reader.result }));
+    reader.readAsDataURL(file);
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
@@ -109,6 +128,8 @@ function Register() {
             username: form.username,
             password: form.password,
             role: form.role,
+            security_question: form.security_question,
+            security_answer: form.security_answer,
             employee: form.role === "employee" ? employeePayload : null,
           }),
         }
@@ -124,7 +145,7 @@ function Register() {
         return;
       }
 
-      navigate("/login");
+      navigate("/login", { state: { message: "Registration submitted. An administrator must approve your account before you can sign in." } });
     } catch {
       setError("Cannot connect to the HRMS API");
     }
@@ -189,7 +210,10 @@ function Register() {
             onChange={handleChange}
             placeholder="Create a password"
             autoComplete="new-password"
-            minLength="15"
+            minLength="7"
+            maxLength="15"
+            pattern="(?=.*[0-9])(?=.*[^A-Za-z0-9]).{7,15}"
+            title="Use 7-15 characters with at least one digit and one special character"
             required
           />
 
@@ -201,9 +225,20 @@ function Register() {
             onChange={(event) => setConfirmPassword(event.target.value)}
             placeholder="Repeat your password"
             autoComplete="new-password"
-            minLength="15"
+            minLength="7"
+            maxLength="15"
             required
           />
+
+          <label htmlFor="security_question">Verification question</label>
+          <select id="security_question" name="security_question" value={form.security_question} onChange={handleChange} required>
+            <option value="birthplace">What is your birthplace?</option>
+            <option value="first_school">What was your first school?</option>
+            <option value="childhood_nickname">What was your childhood nickname?</option>
+          </select>
+
+          <label htmlFor="security_answer">Verification answer</label>
+          <input id="security_answer" name="security_answer" value={form.security_answer} onChange={handleChange} minLength="2" maxLength="100" autoComplete="off" required />
 
           {form.role === "employee" && (
             <fieldset className="employee-fields">
@@ -262,6 +297,11 @@ function Register() {
                 <div className="full-width">
                   <label htmlFor="residential_address">Residential address</label>
                   <input id="residential_address" name="residential_address" value={employee.residential_address} onChange={handleEmployeeChange} required />
+                </div>
+                <div className="full-width">
+                  <label htmlFor="employee_photo">Employee photo (optional)</label>
+                  <input id="employee_photo" type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoChange} />
+                  {employee.employee_photo && <img className="photo-preview" src={employee.employee_photo} alt="Employee preview" />}
                 </div>
                 <div>
                   <label htmlFor="division_id">Division</label>

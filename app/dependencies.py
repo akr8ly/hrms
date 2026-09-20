@@ -43,6 +43,9 @@ def get_current_user(
     if user is None:
         raise unauthorized
 
+    if user.approval_status != "approved":
+        raise HTTPException(403, "Your account is awaiting administrator approval")
+
     return user
 
 def require_roles(*allowed_roles: str):

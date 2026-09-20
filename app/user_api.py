@@ -56,6 +56,27 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     return user
 
 
+@router.post("/users/{user_id}/approve", response_model=UserRead)
+def approve_user(user_id: int, db: Session = Depends(get_db)):
+    user = get_user(user_id, db)
+    user.approval_status = "approved"
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.post("/users/{user_id}/reject", response_model=UserRead)
+def reject_user(user_id: int, db: Session = Depends(get_db)):
+    user = get_user(user_id, db)
+    role = db.get(Role, user.role_id)
+    if role is not None and role.name == "admin":
+        raise HTTPException(409, "Administrator accounts cannot be rejected")
+    user.approval_status = "rejected"
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 @router.patch("/users/{user_id}", response_model=UserRead)
 def update_user_access(user_id: int, data: UserAccessUpdate, db: Session = Depends(get_db)):
     if db.get_bind().dialect.name == "postgresql":

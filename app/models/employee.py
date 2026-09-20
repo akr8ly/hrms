@@ -55,6 +55,11 @@ class Employee(Base):
         Text,
         nullable=False,
     )
+
+    employee_photo: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
     date_of_joining: Mapped[date] = mapped_column(
         Date,
         nullable=False,

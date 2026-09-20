@@ -13,6 +13,9 @@ from app.dependencies import get_current_user
 from app.encryption import get_employee_key_ring
 from app.employee_api import lock_employee_writes, storage_values, validate_references
 from app.schemas.user import (
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    SecurityQuestionResponse,
     UserRegister,
     UserRead,
     UserLogin,
@@ -21,6 +24,7 @@ from app.schemas.user import (
 )
 from app.security import (
     hash_password,
+    normalize_security_answer,
     verify_password,
     create_access_token,
 )
@@ -86,6 +90,11 @@ def register(
     user = User(
         username=data.username,
         password_hash=hash_password(data.password.get_secret_value()),
+        security_question=data.security_question,
+        security_answer_hash=hash_password(
+            normalize_security_answer(data.security_answer.get_secret_value())
+        ),
+        approval_status="pending",
         role_id=role.id,
         employee_id=employee.id if employee is not None else None,
     )
@@ -121,9 +130,35 @@ def login(
     ):
         raise HTTPException(401, "Invalid username or password")
 
+    if user.approval_status == "pending":
+        raise HTTPException(403, "Your registration is awaiting administrator approval")
+    if user.approval_status == "rejected":
+        raise HTTPException(403, "Your registration was rejected by an administrator")
+
     return TokenResponse(
         access_token=create_access_token(user.id)
     )
+
+
+@router.post("/forgot-password", response_model=SecurityQuestionResponse)
+def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = db.scalar(select(User).where(User.username == data.username))
+    if user is None or user.security_question is None or user.security_answer_hash is None:
+        raise HTTPException(404, "Password recovery is not available for this account")
+    return SecurityQuestionResponse(security_question=user.security_question)
+
+
+@router.post("/reset-password", status_code=204)
+def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
+    user = db.scalar(select(User).where(User.username == data.username))
+    if user is None or user.security_answer_hash is None:
+        raise HTTPException(400, "Username or security answer is incorrect")
+    answer = normalize_security_answer(data.security_answer.get_secret_value())
+    if not verify_password(answer, user.security_answer_hash):
+        raise HTTPException(400, "Username or security answer is incorrect")
+    user.password_hash = hash_password(data.new_password.get_secret_value())
+    db.commit()
+    return None
 
 @router.get("/me", response_model=CurrentUserRead)
 def get_my_account(

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from typing import Literal
 
 from app.schemas.employee import EmployeeCreate
@@ -13,12 +13,24 @@ class UserRegister(BaseModel):
     )
 
     password: SecretStr = Field(
-        min_length=15,
-        max_length=128,
+        min_length=7,
+        max_length=15,
     )
 
     role: Literal["employee", "query"]
     employee: EmployeeCreate | None = None
+    security_question: Literal["birthplace", "first_school", "childhood_nickname"]
+    security_answer: SecretStr = Field(min_length=2, max_length=100)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_policy(cls, password: SecretStr):
+        value = password.get_secret_value()
+        if not any(character.isdigit() for character in value):
+            raise ValueError("Password must contain at least one digit")
+        if not any(not character.isalnum() for character in value):
+            raise ValueError("Password must contain at least one special character")
+        return password
 
     @model_validator(mode="after")
     def validate_role_profile(self):
@@ -35,6 +47,7 @@ class UserRead(BaseModel):
     username: str
     role_id: int
     employee_id: int | None
+    approval_status: Literal["pending", "approved", "rejected"]
 
 class CurrentUserRead(UserRead):
     role: Literal["admin", "employee", "query"]
@@ -44,6 +57,32 @@ class UserLogin(BaseModel):
 
     username: str = Field(min_length=3, max_length=50)
     password: SecretStr = Field(min_length=1, max_length=128)
+
+
+class ForgotPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=3, max_length=50)
+
+
+class SecurityQuestionResponse(BaseModel):
+    security_question: Literal["birthplace", "first_school", "childhood_nickname"]
+
+
+class ResetPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=3, max_length=50)
+    security_answer: SecretStr = Field(min_length=2, max_length=100)
+    new_password: SecretStr = Field(min_length=7, max_length=15)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_policy(cls, password: SecretStr):
+        value = password.get_secret_value()
+        if not any(character.isdigit() for character in value):
+            raise ValueError("Password must contain at least one digit")
+        if not any(not character.isalnum() for character in value):
+            raise ValueError("Password must contain at least one special character")
+        return password
     
 class TokenResponse(BaseModel):
     access_token: str

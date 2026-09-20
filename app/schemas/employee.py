@@ -1,6 +1,9 @@
 from datetime import date, datetime
 from enum import Enum
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+import base64
+import binascii
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 class EmploymentType(str, Enum):
     INTERN = "intern"
@@ -28,6 +31,7 @@ class EmployeeBase(BaseModel):
     work_email: EmailStr
     phone_number: str = Field(min_length=8, max_length=20)
     residential_address: str = Field(min_length=1, max_length=500)
+    employee_photo: str | None = None
     date_of_joining: date
     employment_type: EmploymentType
     employment_status: EmploymentStatus = EmploymentStatus.ACTIVE
@@ -37,6 +41,26 @@ class EmployeeBase(BaseModel):
     location_id: int = Field(gt=0)
     office_address_id: int = Field(gt=0)
     reporting_manager_id: int | None = Field(default=None, gt=0)
+
+    @field_validator("employee_photo")
+    @classmethod
+    def validate_employee_photo(cls, value: str | None):
+        if value is None:
+            return value
+        prefix, separator, encoded = value.partition(",")
+        if not separator or prefix not in {
+            "data:image/jpeg;base64",
+            "data:image/png;base64",
+            "data:image/webp;base64",
+        }:
+            raise ValueError("Photo must be a JPEG, PNG or WebP image")
+        try:
+            photo = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError):
+            raise ValueError("Photo contains invalid base64 data") from None
+        if not photo or len(photo) > 2 * 1024 * 1024:
+            raise ValueError("Photo must be between 1 byte and 2 MB")
+        return value
     @model_validator(mode="after")
     def validate_dates(self):
         if self.date_of_birth >= date.today():
@@ -96,6 +120,7 @@ class EmployeeUpdate(BaseModel):
         min_length=1,
         max_length=500,
     )
+    employee_photo: str | None = None
     date_of_joining: date | None = None
     employment_type: EmploymentType | None = None
     employment_status: EmploymentStatus | None = None
