@@ -175,5 +175,6 @@ def get_my_account(
         username=current_user.username,
         role_id=current_user.role_id,
         employee_id=current_user.employee_id,
+        approval_status=current_user.approval_status,
         role=role.name,
     )
