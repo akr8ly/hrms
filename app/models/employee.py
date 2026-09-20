@@ -114,4 +114,3 @@ class Employee(Base):
         DateTime,
         nullable=False,
     )
-    
