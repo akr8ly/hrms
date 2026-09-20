@@ -1,8 +1,8 @@
 function Sidebar({ role = "employee", collapsed, activeItem, onSelect, onToggle }) {
   const menus = {
-    admin: ["Dashboard", "Employees", "Masters", "Users", "API Endpoints"],
-    employee: ["Dashboard", "My Profile", "API Endpoints"],
-    query: ["Dashboard", "Employees", "API Endpoints"],
+    admin: ["Dashboard", "Employees", "Masters", "Users"],
+    employee: ["Dashboard", "My Profile"],
+    query: ["Dashboard", "Employees"],
   };
 
   const roleMenus = menus[role] ?? menus.employee;

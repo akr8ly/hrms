@@ -2,34 +2,12 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/sidebar";
 import { API_BASE_URL } from "../api";
-
-
-const endpoints = [
-  ["POST", "/auth/register", "Public registration"],
-  ["POST", "/auth/login", "Public login"],
-  ["POST", "/auth/forgot-password", "Password recovery question"],
-  ["POST", "/auth/reset-password", "Reset password"],
-  ["GET", "/auth/me", "Current approved account"],
-  ["GET", "/employees", "Role-filtered employee list"],
-  ["POST", "/employees", "Admin only"],
-  ["GET", "/employees/{employee_id}", "Role-filtered employee detail"],
-  ["PATCH", "/employees/{employee_id}", "Admin or own permitted fields"],
-  ["DELETE", "/employees/{employee_id}", "Admin only"],
-  ["GET/POST/PATCH/DELETE", "/divisions", "Master CRUD"],
-  ["GET/POST/PATCH/DELETE", "/departments", "Master CRUD"],
-  ["GET/POST/PATCH/DELETE", "/designations", "Master CRUD"],
-  ["GET/POST/PATCH/DELETE", "/locations", "Master CRUD"],
-  ["GET/POST/PATCH/DELETE", "/office-addresses", "Master CRUD"],
-  ["GET/PATCH", "/admin/users", "Admin user management"],
-  ["POST", "/admin/users/{user_id}/approve", "Admin approval"],
-  ["POST", "/admin/users/{user_id}/reject", "Admin rejection"],
-];
+import { EmployeesPage, MastersPage, UsersPage } from "../components/management";
 
 
 function Dashboard() {
   const [collapsed, setCollapsed] = useState(false);
   const [user, setUser] = useState(null);
-  const [users, setUsers] = useState([]);
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState("");
   const [activeItem, setActiveItem] = useState("Dashboard");
@@ -60,10 +38,6 @@ function Dashboard() {
   useEffect(() => {
     async function loadSection() {
       if (!user) return;
-      if (activeItem === "Users" && user.role === "admin") {
-        const response = await fetch(`${API_BASE_URL}/admin/users?limit=100`, { headers: { Authorization: `Bearer ${token}` } });
-        if (response.ok) setUsers(await response.json());
-      }
       if (activeItem === "My Profile" && user.employee_id) {
         const response = await fetch(`${API_BASE_URL}/employees/${user.employee_id}`, { headers: { Authorization: `Bearer ${token}` } });
         if (response.ok) setProfile(await response.json());
@@ -71,20 +45,6 @@ function Dashboard() {
     }
     loadSection();
   }, [activeItem, token, user]);
-
-  async function updateApproval(userId, action) {
-    setError("");
-    const response = await fetch(`${API_BASE_URL}/admin/users/${userId}/${action}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setError(data.detail || "Account approval could not be updated");
-      return;
-    }
-    setUsers((current) => current.map((item) => item.id === userId ? data : item));
-  }
 
   function logout() {
     localStorage.removeItem("access_token");
@@ -100,20 +60,10 @@ function Dashboard() {
       <main>
         <div className="page-header"><div><h1>HRMS Dashboard</h1><p>Welcome, {user.username}. Your role is {user.role}.</p></div><button onClick={logout}>Logout</button></div>
         {error && <p className="error-message">{error}</p>}
-        {activeItem === "API Endpoints" ? <EndpointDirectory role={user.role} /> : activeItem === "Users" && user.role === "admin" ? <UserApprovals users={users} onAction={updateApproval} /> : activeItem === "My Profile" ? <Profile profile={profile} /> : <section className="dashboard-card"><span>{activeItem}</span><h2>{activeItem}</h2><p>{sectionDescription(user.role, activeItem)}</p></section>}
+        {activeItem === "Employees" ? <EmployeesPage token={token} role={user.role} /> : activeItem === "Masters" && user.role === "admin" ? <MastersPage token={token} /> : activeItem === "Users" && user.role === "admin" ? <UsersPage token={token} /> : activeItem === "My Profile" ? <Profile profile={profile} /> : <section className="dashboard-card"><span>{activeItem}</span><h2>{activeItem}</h2><p>{sectionDescription(user.role, activeItem)}</p></section>}
       </main>
     </div>
   );
-}
-
-
-function EndpointDirectory({ role }) {
-  return <section className="dashboard-card endpoint-card"><span>API Directory</span><h2>Available API endpoints</h2><p>Interactive request testing remains available in FastAPI Swagger at <a href={`${API_BASE_URL}/docs`} target="_blank" rel="noreferrer">/docs</a>.</p><div className="endpoint-list">{endpoints.filter(([, path]) => role === "admin" || !path.startsWith("/admin")).map(([method, path, access]) => <div className="endpoint-row" key={`${method}-${path}`}><strong>{method}</strong><code>{path}</code><small>{access}</small></div>)}</div></section>;
-}
-
-
-function UserApprovals({ users, onAction }) {
-  return <section className="dashboard-card wide-card"><span>Administration</span><h2>Registration approvals</h2><div className="user-list">{users.map((user) => <div className="user-row" key={user.id}><div><strong>{user.username}</strong><small>Employee ID: {user.employee_id ?? "Not linked"}</small></div><em className={`status ${user.approval_status}`}>{user.approval_status}</em>{user.approval_status !== "approved" && <button onClick={() => onAction(user.id, "approve")}>Approve</button>}{user.approval_status !== "rejected" && <button className="reject-button" onClick={() => onAction(user.id, "reject")}>Reject</button>}</div>)}</div></section>;
 }
 
 

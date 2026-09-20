@@ -402,6 +402,37 @@ main {
 .status.approved { color: #15803d; }
 .status.rejected { color: #b42318; }
 
+.management-page {
+  margin-top: 30px;
+  padding: 28px;
+  background: #fff;
+  border: 1px solid #dbe3ee;
+  border-radius: 16px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.08);
+}
+
+.section-heading span { color: #0284c7; font-size: 12px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.section-heading h2 { margin: 7px 0; color: #0f172a; }
+.section-heading p { margin: 0; color: #64748b; }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0; }
+.tabs button, .row-actions button, .form-actions button { padding: 9px 13px; color: #075985; font-weight: 700; background: #e0f2fe; border: 0; border-radius: 8px; cursor: pointer; }
+.tabs button.active, .form-actions button:first-child { color: #fff; background: #0284c7; }
+.crud-form { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 14px; margin: 20px 0 28px; padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; }
+.employee-form { grid-template-columns: repeat(4, minmax(150px, 1fr)); }
+.crud-form label { display: grid; gap: 6px; color: #475569; font-size: 12px; font-weight: 700; text-transform: capitalize; }
+.crud-form input, .crud-form select, table select, .compact-input { min-width: 0; height: 40px; padding: 0 10px; color: #0f172a; background: #fff; border: 1px solid #cbd5e1; border-radius: 7px; }
+.form-actions { align-self: end; display: flex; gap: 8px; }
+.form-actions .secondary { color: #475569; background: #e2e8f0; }
+.inline-message { padding: 10px 12px; color: #075985; background: #f0f9ff; border-radius: 8px; }
+.table-wrap { width: 100%; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; color: #334155; font-size: 14px; }
+th { color: #64748b; font-size: 11px; letter-spacing: .05em; text-align: left; text-transform: uppercase; }
+th, td { padding: 12px 10px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+td small { display: block; margin-top: 3px; color: #94a3b8; }
+.row-actions { display: flex; gap: 7px; }
+.row-actions .danger { color: #b42318; background: #fee2e2; }
+.compact-input { width: 110px; }
+
 @media (max-width: 600px) {
   .auth-card {
     padding: 28px 22px;
@@ -411,6 +442,8 @@ main {
   main {
     padding: 24px 18px;
   }
+
+  .crud-form, .employee-form { grid-template-columns: 1fr; }
 }
 
 .auth-page {
