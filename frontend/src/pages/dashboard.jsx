@@ -115,7 +115,46 @@ function Profile({ profile, token, onUpdate }) {
     }
   }
 
-  return <section className="dashboard-card profile-card"><span>Employee profile</span><div className="profile-summary">{profile.employee_photo ? <img className="profile-photo" src={profile.employee_photo} alt="Employee" /> : <div className="profile-placeholder">{profile.first_name[0]}{profile.last_name[0]}</div>}<div><h2>{profile.first_name} {profile.last_name}</h2><p>{profile.employee_code} · {profile.work_email}</p></div></div>{message && <p className="inline-message profile-message">{message}</p>}{editing ? <form className="profile-form" onSubmit={save}><label>Personal email<input type="email" required value={form.personal_email} onChange={(event) => setForm({ ...form, personal_email: event.target.value })} /></label><label>Phone number<input type="tel" required minLength="8" maxLength="20" value={form.phone_number} onChange={(event) => setForm({ ...form, phone_number: event.target.value })} /></label><label>Residential address<textarea required maxLength="500" value={form.residential_address} onChange={(event) => setForm({ ...form, residential_address: event.target.value })} /></label><label>Replace photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => readPhoto(event.target.files[0])} /></label>{photoSource && <PhotoEditor source={photoSource} onChange={setPhoto} />}<div className="form-actions"><button type="submit">Save profile</button><button type="button" className="secondary" onClick={() => setEditing(false)}>Cancel</button></div></form> : <div className="profile-details"><div><small>Personal email</small><strong>{profile.personal_email}</strong></div><div><small>Phone</small><strong>{profile.phone_number}</strong></div><div className="full-detail"><small>Residential address</small><strong>{profile.residential_address}</strong></div><button onClick={beginEdit}>Edit profile</button></div>}</section>;
+  return <section className="dashboard-card profile-card"><span>Employee profile</span><div className="profile-summary">{profile.employee_photo ? <img className="profile-photo" src={profile.employee_photo} alt="Employee" /> : <div className="profile-placeholder">{profile.first_name[0]}{profile.last_name[0]}</div>}<div><h2>{profile.first_name} {profile.last_name}</h2><p>{profile.employee_code} · {profile.work_email}</p></div></div>{message && <p className="inline-message profile-message">{message}</p>}{editing ? <form className="profile-form" onSubmit={save}><label>Personal email<input type="email" required value={form.personal_email} onChange={(event) => setForm({ ...form, personal_email: event.target.value })} /></label><label>Phone number<input type="tel" required minLength="8" maxLength="20" value={form.phone_number} onChange={(event) => setForm({ ...form, phone_number: event.target.value })} /></label><label>Residential address<textarea required maxLength="500" value={form.residential_address} onChange={(event) => setForm({ ...form, residential_address: event.target.value })} /></label><label>Replace photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => readPhoto(event.target.files[0])} /></label>{photoSource && <PhotoEditor source={photoSource} onChange={setPhoto} />}<div className="form-actions"><button type="submit">Save profile</button><button type="button" className="secondary" onClick={() => setEditing(false)}>Cancel</button></div></form> : <div className="profile-details"><div><small>Personal email</small><strong>{profile.personal_email}</strong></div><div><small>Phone</small><strong>{profile.phone_number}</strong></div><div className="full-detail"><small>Residential address</small><strong>{profile.residential_address}</strong></div><button onClick={beginEdit}>Edit profile</button></div>}<PasswordChange token={token} /></section>;
+}
+
+
+function PasswordChange({ token }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
+  const [message, setMessage] = useState("");
+  const [failed, setFailed] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    setMessage("");
+    if (form.new_password !== form.confirm_password) {
+      setFailed(true);
+      setMessage("New passwords do not match.");
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ current_password: form.current_password, new_password: form.new_password }),
+      });
+      const data = response.status === 204 ? null : await response.json();
+      if (!response.ok) {
+        const detail = Array.isArray(data?.detail) ? data.detail.map((item) => item.msg).join(", ") : data?.detail;
+        throw new Error(detail || "Password could not be changed");
+      }
+      setFailed(false);
+      setMessage("Password changed successfully.");
+      setForm({ current_password: "", new_password: "", confirm_password: "" });
+      setOpen(false);
+    } catch (error) {
+      setFailed(true);
+      setMessage(error.message);
+    }
+  }
+
+  return <div className="password-panel"><div><h3>Password</h3><p>Use 7–15 characters with at least one digit and one special character.</p></div><button type="button" onClick={() => { setOpen(!open); setMessage(""); }}>{open ? "Cancel" : "Change password"}</button>{message && <p className={failed ? "error-message" : "success-message"}>{message}</p>}{open && <form onSubmit={submit}><label>Current password<input type="password" required autoComplete="current-password" value={form.current_password} onChange={(event) => setForm({ ...form, current_password: event.target.value })} /></label><label>New password<input type="password" required minLength="7" maxLength="15" autoComplete="new-password" value={form.new_password} onChange={(event) => setForm({ ...form, new_password: event.target.value })} /></label><label>Confirm new password<input type="password" required minLength="7" maxLength="15" autoComplete="new-password" value={form.confirm_password} onChange={(event) => setForm({ ...form, confirm_password: event.target.value })} /></label><button type="submit">Update password</button></form>}</div>;
 }
 
 

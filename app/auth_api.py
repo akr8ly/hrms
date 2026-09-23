@@ -14,6 +14,7 @@ from app.encryption import get_employee_key_ring
 from app.employee_api import lock_employee_writes, storage_values, validate_references
 from app.schemas.user import (
     ForgotPasswordRequest,
+    ChangePasswordRequest,
     ResetPasswordRequest,
     SecurityQuestionResponse,
     UserRegister,
@@ -157,6 +158,23 @@ def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
     if not verify_password(answer, user.security_answer_hash):
         raise HTTPException(400, "Username or security answer is incorrect")
     user.password_hash = hash_password(data.new_password.get_secret_value())
+    db.commit()
+    return None
+
+
+@router.post("/change-password", status_code=204)
+def change_password(
+    data: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    current_password = data.current_password.get_secret_value()
+    new_password = data.new_password.get_secret_value()
+    if not verify_password(current_password, current_user.password_hash):
+        raise HTTPException(400, "Current password is incorrect")
+    if verify_password(new_password, current_user.password_hash):
+        raise HTTPException(400, "New password must be different from the current password")
+    current_user.password_hash = hash_password(new_password)
     db.commit()
     return None
 

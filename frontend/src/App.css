@@ -459,6 +459,15 @@ td small { display: block; margin-top: 3px; color: #94a3b8; }
 .photo-editor input[type="range"] { height: auto; padding: 0; border: 0; }
 .photo-editor-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .photo-editor-actions button { padding: 8px 12px; color: #075985; font-weight: 700; background: #e0f2fe; border: 0; border-radius: 7px; cursor: pointer; }
+.password-panel { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; margin-top: 28px; padding-top: 24px; border-top: 1px solid #e2e8f0; }
+.password-panel h3 { margin: 0 0 5px; color: #0f172a; }
+.password-panel > div > p { margin: 0; color: #64748b; font-size: 13px; }
+.password-panel > button, .password-panel form > button { padding: 10px 14px; color: #fff; font-weight: 700; background: #0284c7; border: 0; border-radius: 8px; cursor: pointer; }
+.password-panel > p, .password-panel form { grid-column: 1 / -1; }
+.password-panel > p { margin: 0; }
+.password-panel form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 12px; align-items: end; }
+.password-panel form label { display: grid; gap: 6px; color: #475569; font-size: 12px; font-weight: 700; }
+.password-panel form input { width: 100%; height: 42px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
 
 @media (max-width: 600px) {
   .auth-card {
@@ -473,6 +482,7 @@ td small { display: block; margin-top: 3px; color: #94a3b8; }
   .crud-form, .employee-form { grid-template-columns: 1fr; }
   .profile-details, .profile-form { grid-template-columns: 1fr; }
   .profile-details .full-detail { grid-column: auto; }
+  .password-panel, .password-panel form { grid-template-columns: 1fr; }
 }
 
 .auth-page {

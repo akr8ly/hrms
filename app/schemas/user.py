@@ -83,6 +83,22 @@ class ResetPasswordRequest(BaseModel):
         if not any(not character.isalnum() for character in value):
             raise ValueError("Password must contain at least one special character")
         return password
+
+
+class ChangePasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_password: SecretStr = Field(min_length=1, max_length=128)
+    new_password: SecretStr = Field(min_length=7, max_length=15)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_policy(cls, password: SecretStr):
+        value = password.get_secret_value()
+        if not any(character.isdigit() for character in value):
+            raise ValueError("Password must contain at least one digit")
+        if not any(not character.isalnum() for character in value):
+            raise ValueError("Password must contain at least one special character")
+        return password
     
 class TokenResponse(BaseModel):
     access_token: str
