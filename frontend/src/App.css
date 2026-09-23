@@ -450,6 +450,15 @@ td small { display: block; margin-top: 3px; color: #94a3b8; }
 .profile-form textarea { min-height: 90px; resize: vertical; }
 .profile-form .form-actions { align-self: end; }
 .profile-message { margin: 0 0 18px !important; }
+.photo-editor { grid-column: 1 / -1; display: grid; justify-items: center; gap: 12px; padding: 18px; background: #f8fafc; border: 1px solid #dbe3ee; border-radius: 12px; }
+.photo-crop-grid { position: relative; width: 240px; height: 240px; overflow: hidden; touch-action: none; cursor: move; background-image: linear-gradient(rgba(255,255,255,.34) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.34) 1px, transparent 1px); background-size: 80px 80px; border: 4px solid #bae6fd; border-radius: 50%; box-shadow: 0 10px 28px rgba(15, 23, 42, .16); }
+.photo-crop-grid::after { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(rgba(255,255,255,.42) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.42) 1px, transparent 1px); background-size: 33.333% 33.333%; }
+.photo-crop-grid canvas { width: 100%; height: 100%; display: block; pointer-events: none; }
+.photo-editor > p { margin: 0; color: #64748b; font-size: 12px; }
+.photo-editor > label { width: min(100%, 360px); grid-template-columns: 50px 1fr; align-items: center; }
+.photo-editor input[type="range"] { height: auto; padding: 0; border: 0; }
+.photo-editor-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.photo-editor-actions button { padding: 8px 12px; color: #075985; font-weight: 700; background: #e0f2fe; border: 0; border-radius: 7px; cursor: pointer; }
 
 @media (max-width: 600px) {
   .auth-card {

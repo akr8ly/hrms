@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/sidebar";
 import { API_BASE_URL } from "../api";
@@ -71,6 +71,7 @@ function Profile({ profile, token, onUpdate }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ personal_email: "", phone_number: "", residential_address: "" });
   const [photo, setPhoto] = useState(null);
+  const [photoSource, setPhotoSource] = useState(null);
   const [message, setMessage] = useState("");
 
   if (!profile) return <section className="dashboard-card"><h2>My Profile</h2><p>No linked employee profile is available.</p></section>;
@@ -82,6 +83,7 @@ function Profile({ profile, token, onUpdate }) {
       residential_address: profile.residential_address,
     });
     setPhoto(null);
+    setPhotoSource(null);
     setMessage("");
     setEditing(true);
   }
@@ -89,7 +91,7 @@ function Profile({ profile, token, onUpdate }) {
   function readPhoto(file) {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => setPhoto(reader.result);
+    reader.onload = () => setPhotoSource(reader.result);
     reader.readAsDataURL(file);
   }
 
@@ -113,7 +115,65 @@ function Profile({ profile, token, onUpdate }) {
     }
   }
 
-  return <section className="dashboard-card profile-card"><span>Employee profile</span><div className="profile-summary">{profile.employee_photo ? <img className="profile-photo" src={profile.employee_photo} alt="Employee" /> : <div className="profile-placeholder">{profile.first_name[0]}{profile.last_name[0]}</div>}<div><h2>{profile.first_name} {profile.last_name}</h2><p>{profile.employee_code} · {profile.work_email}</p></div></div>{message && <p className="inline-message profile-message">{message}</p>}{editing ? <form className="profile-form" onSubmit={save}><label>Personal email<input type="email" required value={form.personal_email} onChange={(event) => setForm({ ...form, personal_email: event.target.value })} /></label><label>Phone number<input type="tel" required minLength="8" maxLength="20" value={form.phone_number} onChange={(event) => setForm({ ...form, phone_number: event.target.value })} /></label><label>Residential address<textarea required maxLength="500" value={form.residential_address} onChange={(event) => setForm({ ...form, residential_address: event.target.value })} /></label><label>Replace photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => readPhoto(event.target.files[0])} /></label>{photo && <img className="photo-preview" src={photo} alt="New employee preview" />}<div className="form-actions"><button type="submit">Save profile</button><button type="button" className="secondary" onClick={() => setEditing(false)}>Cancel</button></div></form> : <div className="profile-details"><div><small>Personal email</small><strong>{profile.personal_email}</strong></div><div><small>Phone</small><strong>{profile.phone_number}</strong></div><div className="full-detail"><small>Residential address</small><strong>{profile.residential_address}</strong></div><button onClick={beginEdit}>Edit profile</button></div>}</section>;
+  return <section className="dashboard-card profile-card"><span>Employee profile</span><div className="profile-summary">{profile.employee_photo ? <img className="profile-photo" src={profile.employee_photo} alt="Employee" /> : <div className="profile-placeholder">{profile.first_name[0]}{profile.last_name[0]}</div>}<div><h2>{profile.first_name} {profile.last_name}</h2><p>{profile.employee_code} · {profile.work_email}</p></div></div>{message && <p className="inline-message profile-message">{message}</p>}{editing ? <form className="profile-form" onSubmit={save}><label>Personal email<input type="email" required value={form.personal_email} onChange={(event) => setForm({ ...form, personal_email: event.target.value })} /></label><label>Phone number<input type="tel" required minLength="8" maxLength="20" value={form.phone_number} onChange={(event) => setForm({ ...form, phone_number: event.target.value })} /></label><label>Residential address<textarea required maxLength="500" value={form.residential_address} onChange={(event) => setForm({ ...form, residential_address: event.target.value })} /></label><label>Replace photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => readPhoto(event.target.files[0])} /></label>{photoSource && <PhotoEditor source={photoSource} onChange={setPhoto} />}<div className="form-actions"><button type="submit">Save profile</button><button type="button" className="secondary" onClick={() => setEditing(false)}>Cancel</button></div></form> : <div className="profile-details"><div><small>Personal email</small><strong>{profile.personal_email}</strong></div><div><small>Phone</small><strong>{profile.phone_number}</strong></div><div className="full-detail"><small>Residential address</small><strong>{profile.residential_address}</strong></div><button onClick={beginEdit}>Edit profile</button></div>}</section>;
+}
+
+
+function PhotoEditor({ source, onChange }) {
+  const canvasRef = useRef(null);
+  const imageRef = useRef(null);
+  const dragRef = useRef(null);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
+
+  useEffect(() => {
+    const image = new Image();
+    image.onload = () => {
+      imageRef.current = image;
+      setPosition({ x: 0, y: 0 });
+      setZoom(1);
+      setRotation(0);
+    };
+    image.src = source;
+  }, [source]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const image = imageRef.current;
+    if (!canvas || !image) return;
+    const context = canvas.getContext("2d");
+    const size = canvas.width;
+    const baseScale = Math.max(size / image.width, size / image.height);
+    context.clearRect(0, 0, size, size);
+    context.save();
+    context.beginPath();
+    context.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+    context.clip();
+    context.fillStyle = "#e2e8f0";
+    context.fillRect(0, 0, size, size);
+    context.translate(size / 2 + position.x, size / 2 + position.y);
+    context.rotate(rotation * Math.PI / 180);
+    context.scale(baseScale * zoom, baseScale * zoom);
+    context.drawImage(image, -image.width / 2, -image.height / 2);
+    context.restore();
+    onChange(canvas.toDataURL("image/jpeg", 0.88));
+  }, [position, zoom, rotation, source, onChange]);
+
+  function pointerDown(event) {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = { x: event.clientX, y: event.clientY, startX: position.x, startY: position.y };
+  }
+
+  function pointerMove(event) {
+    if (!dragRef.current) return;
+    setPosition({
+      x: dragRef.current.startX + event.clientX - dragRef.current.x,
+      y: dragRef.current.startY + event.clientY - dragRef.current.y,
+    });
+  }
+
+  return <div className="photo-editor"><div className="photo-crop-grid" onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={() => { dragRef.current = null; }}><canvas ref={canvasRef} width="320" height="320" /></div><p>Drag the photo inside the circle to position it.</p><label>Zoom<input type="range" min="1" max="3" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /></label><label>Tilt<input type="range" min="-45" max="45" step="1" value={rotation} onChange={(event) => setRotation(Number(event.target.value))} /></label><div className="photo-editor-actions"><button type="button" onClick={() => setRotation((value) => value - 90)}>↶ Rotate</button><button type="button" onClick={() => setRotation((value) => value + 90)}>Rotate ↷</button><button type="button" onClick={() => { setPosition({ x: 0, y: 0 }); setZoom(1); setRotation(0); }}>Reset</button></div></div>;
 }
 
 
