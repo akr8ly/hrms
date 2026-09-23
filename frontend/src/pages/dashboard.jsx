@@ -60,14 +60,14 @@ function Dashboard() {
       <main>
         <div className="page-header"><div><h1>HRMS Dashboard</h1><p>Welcome, {user.username}. Your role is {user.role}.</p></div><button onClick={logout}>Logout</button></div>
         {error && <p className="error-message">{error}</p>}
-        {activeItem === "Employees" ? <EmployeesPage token={token} role={user.role} /> : activeItem === "Masters" && user.role === "admin" ? <MastersPage token={token} /> : activeItem === "Users" && user.role === "admin" ? <UsersPage token={token} /> : activeItem === "My Profile" ? <Profile profile={profile} token={token} onUpdate={setProfile} /> : <section className="dashboard-card"><span>{activeItem}</span><h2>{activeItem}</h2><p>{sectionDescription(user.role, activeItem)}</p></section>}
+        {activeItem === "Employees" ? <EmployeesPage token={token} role={user.role} /> : activeItem === "Masters" && user.role === "admin" ? <MastersPage token={token} /> : activeItem === "Users" && user.role === "admin" ? <UsersPage token={token} /> : activeItem === "My Profile" ? <Profile profile={profile} token={token} onUpdate={setProfile} onPasswordChanged={logout} /> : <section className="dashboard-card"><span>{activeItem}</span><h2>{activeItem}</h2><p>{sectionDescription(user.role, activeItem)}</p></section>}
       </main>
     </div>
   );
 }
 
 
-function Profile({ profile, token, onUpdate }) {
+function Profile({ profile, token, onUpdate, onPasswordChanged }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ personal_email: "", phone_number: "", residential_address: "" });
   const [photo, setPhoto] = useState(null);
@@ -115,11 +115,11 @@ function Profile({ profile, token, onUpdate }) {
     }
   }
 
-  return <section className="dashboard-card profile-card"><span>Employee profile</span><div className="profile-summary">{profile.employee_photo ? <img className="profile-photo" src={profile.employee_photo} alt="Employee" /> : <div className="profile-placeholder">{profile.first_name[0]}{profile.last_name[0]}</div>}<div><h2>{profile.first_name} {profile.last_name}</h2><p>{profile.employee_code} · {profile.work_email}</p></div></div>{message && <p className="inline-message profile-message">{message}</p>}{editing ? <form className="profile-form" onSubmit={save}><label>Personal email<input type="email" required value={form.personal_email} onChange={(event) => setForm({ ...form, personal_email: event.target.value })} /></label><label>Phone number<input type="tel" required minLength="8" maxLength="20" value={form.phone_number} onChange={(event) => setForm({ ...form, phone_number: event.target.value })} /></label><label>Residential address<textarea required maxLength="500" value={form.residential_address} onChange={(event) => setForm({ ...form, residential_address: event.target.value })} /></label><label>Replace photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => readPhoto(event.target.files[0])} /></label>{photoSource && <PhotoEditor source={photoSource} onChange={setPhoto} />}<div className="form-actions"><button type="submit">Save profile</button><button type="button" className="secondary" onClick={() => setEditing(false)}>Cancel</button></div></form> : <div className="profile-details"><div><small>Personal email</small><strong>{profile.personal_email}</strong></div><div><small>Phone</small><strong>{profile.phone_number}</strong></div><div className="full-detail"><small>Residential address</small><strong>{profile.residential_address}</strong></div><button onClick={beginEdit}>Edit profile</button></div>}<PasswordChange token={token} /></section>;
+  return <section className="dashboard-card profile-card"><span>Employee profile</span><div className="profile-summary">{profile.employee_photo ? <img className="profile-photo" src={profile.employee_photo} alt="Employee" /> : <div className="profile-placeholder">{profile.first_name[0]}{profile.last_name[0]}</div>}<div><h2>{profile.first_name} {profile.last_name}</h2><p>{profile.employee_code} · {profile.work_email}</p></div></div>{message && <p className="inline-message profile-message">{message}</p>}{editing ? <form className="profile-form" onSubmit={save}><label>Personal email<input type="email" required value={form.personal_email} onChange={(event) => setForm({ ...form, personal_email: event.target.value })} /></label><label>Phone number<input type="tel" required minLength="8" maxLength="20" value={form.phone_number} onChange={(event) => setForm({ ...form, phone_number: event.target.value })} /></label><label>Residential address<textarea required maxLength="500" value={form.residential_address} onChange={(event) => setForm({ ...form, residential_address: event.target.value })} /></label><label>Replace photo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => readPhoto(event.target.files[0])} /></label>{photoSource && <PhotoEditor source={photoSource} onChange={setPhoto} />}<div className="form-actions"><button type="submit">Save profile</button><button type="button" className="secondary" onClick={() => setEditing(false)}>Cancel</button></div></form> : <div className="profile-details"><div><small>Personal email</small><strong>{profile.personal_email}</strong></div><div><small>Phone</small><strong>{profile.phone_number}</strong></div><div className="full-detail"><small>Residential address</small><strong>{profile.residential_address}</strong></div><button onClick={beginEdit}>Edit profile</button></div>}<PasswordChange token={token} onChanged={onPasswordChanged} /></section>;
 }
 
 
-function PasswordChange({ token }) {
+function PasswordChange({ token, onChanged }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
   const [message, setMessage] = useState("");
@@ -144,10 +144,7 @@ function PasswordChange({ token }) {
         const detail = Array.isArray(data?.detail) ? data.detail.map((item) => item.msg).join(", ") : data?.detail;
         throw new Error(detail || "Password could not be changed");
       }
-      setFailed(false);
-      setMessage("Password changed successfully.");
-      setForm({ current_password: "", new_password: "", confirm_password: "" });
-      setOpen(false);
+      onChanged();
     } catch (error) {
       setFailed(true);
       setMessage(error.message);
