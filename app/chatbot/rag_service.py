@@ -1,29 +1,15 @@
 import argparse
-from functools import lru_cache
 
 from langchain_core.documents import Document
-from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-from langchain_ollama import ChatOllama
 
 from app.chatbot.config import chatbot_settings
 from app.chatbot.hybrid_search import retrieve_hybrid_policy_matches
-from app.chatbot.memory import session_memory
+from app.chatbot.memory import create_chat_session, session_memory
+from app.chatbot.model import get_chat_model
 from app.chatbot.policy_loader import load_policy_documents
+from app.chatbot.prompts import NO_POLICY_ANSWER, RAG_SYSTEM_PROMPT
 
-
-SYSTEM_PROMPT = """You are the HRMS policy assistant.
-Answer only from the POLICY CONTEXT supplied by the application.
-Do not use general knowledge, assumptions, or invented rules.
-If the context does not answer the question, reply exactly:
-I couldn't find this in the HR policies.
-Keep the answer concise and practical.
-Cite every policy used by placing its policy ID in square brackets, for example
-[POL-LEAVE-001]. Never cite a policy that is not in the supplied context.
-Return only the final answer. Do not show analysis, reasoning, or planning.
-"""
-
-NO_POLICY_ANSWER = "I couldn't find this in the HR policies."
 
 CATEGORY_ALIASES = {
     "attendance": ("attendance",),
@@ -35,24 +21,6 @@ CATEGORY_ALIASES = {
     "remote-work": ("remote work", "work from home", "wfh"),
     "travel": ("travel",),
 }
-
-
-@lru_cache(maxsize=1)
-def get_chat_model() -> BaseChatModel:
-    if chatbot_settings.llm_provider != "ollama":
-        raise ValueError(
-            "The local policy assistant currently requires "
-            "CHATBOT_LLM_PROVIDER=ollama"
-        )
-
-    return ChatOllama(
-        model=chatbot_settings.llm_model,
-        base_url=chatbot_settings.ollama_base_url,
-        temperature=chatbot_settings.llm_temperature,
-        num_predict=chatbot_settings.max_answer_tokens,
-        reasoning=True,
-        validate_model_on_init=True,
-    )
 
 
 def _format_context(documents: list[Document]) -> str:
@@ -126,11 +94,6 @@ def _overview_response(question: str) -> dict[str, object] | None:
             for document in category_documents
         ],
     }
-
-
-def create_chat_session(*, user_id: int, user_role: str) -> str:
-    """Create a user-owned in-memory chatbot session."""
-    return session_memory.create_session(user_id=user_id, user_role=user_role)
 
 
 def _prepare_session(
@@ -242,7 +205,7 @@ def answer_policy_question(
     context = _format_context(documents)
     response = get_chat_model().invoke(
         [
-            SystemMessage(content=SYSTEM_PROMPT),
+            SystemMessage(content=RAG_SYSTEM_PROMPT),
             *history,
             HumanMessage(
                 content=(

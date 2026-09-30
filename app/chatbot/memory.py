@@ -168,3 +168,8 @@ class SessionMemoryStore:
 
 
 session_memory = SessionMemoryStore()
+
+
+def create_chat_session(*, user_id: int, user_role: str) -> str:
+    """Create a user-owned in-memory chatbot session."""
+    return session_memory.create_session(user_id=user_id, user_role=user_role)
