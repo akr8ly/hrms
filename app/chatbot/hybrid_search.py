@@ -89,9 +89,20 @@ def retrieve_hybrid_policy_matches(
 def _main() -> None:
     parser = argparse.ArgumentParser(description="Test hybrid policy retrieval")
     parser.add_argument("question")
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=chatbot_settings.top_k,
+        choices=range(1, 11),
+        metavar="1-10",
+        help="Number of ranked policies to display",
+    )
     args = parser.parse_args()
 
-    for match in retrieve_hybrid_policy_matches(args.question):
+    for match in retrieve_hybrid_policy_matches(
+        args.question,
+        top_k=args.top_k,
+    ):
         print(
             f"{match.document.metadata['policy_id']} | "
             f"hybrid={match.score:.3f} | "
