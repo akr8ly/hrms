@@ -31,12 +31,15 @@ class ChatbotSettings(BaseSettings):
     max_history: int = Field(default=10, ge=0, le=50)
     session_ttl_minutes: int = Field(default=15, ge=5, le=1440)
     max_memory_message_length: int = Field(default=4000, ge=100, le=10000)
-    max_question_length: int = Field(default=500, ge=20, le=2000)
+    max_question_length: int = Field(default=1000, ge=20, le=4000)
+    max_response_length: int = Field(default=4000, ge=200, le=20000)
+    max_input_tokens: int = Field(default=3000, ge=500, le=32000)
+    stream_chunk_size: int = Field(default=120, ge=20, le=1000)
     llm_provider: Literal["openai", "ollama"] = "ollama"
     llm_model: str = "qwen3:4b"
     ollama_base_url: str = "http://127.0.0.1:11434"
     llm_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
-    max_answer_tokens: int = Field(default=4000, ge=100, le=8000)
+    max_answer_tokens: int = Field(default=2000, ge=100, le=8000)
     llm_api_key: SecretStr | None = None
 
 
