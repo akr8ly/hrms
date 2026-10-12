@@ -8,23 +8,33 @@ from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 
 from app.chatbot.config import chatbot_settings
+from app.chatbot.admin_tools import get_admin_tools
 from app.chatbot.memory import create_chat_session, session_memory
 from app.chatbot.model import get_chat_model
+from app.chatbot.moderation import (
+    ContentModerationError,
+    MODERATION_FALLBACK,
+    sanitize_output_text,
+    validate_input_text,
+)
 from app.chatbot.policy_loader import load_policy_documents
-from app.chatbot.prompts import AGENT_SYSTEM_PROMPT, NO_POLICY_ANSWER
+from app.chatbot.prompts import NO_POLICY_ANSWER, get_agent_system_prompt
 from app.chatbot.tools import get_policy_tools
 
 
 POLICY_ID_PATTERN = re.compile(r"\[(POL-[A-Z]+-\d{3})\]")
 
 
-@lru_cache(maxsize=1)
-def get_policy_agent_executor():
+@lru_cache(maxsize=3)
+def get_policy_agent_executor(user_role: str = "employee"):
     """Build and cache the LangChain tool-calling execution graph."""
+    role = user_role.strip().lower()
+    if role not in {"admin", "employee", "query"}:
+        raise ValueError("Unsupported chatbot role")
     return create_agent(
         model=get_chat_model(),
-        tools=get_policy_tools(),
-        system_prompt=AGENT_SYSTEM_PROMPT,
+        tools=[*get_policy_tools(), *get_admin_tools(role)],
+        system_prompt=get_agent_system_prompt(role),
         name="hr_policy_agent",
     )
 
@@ -34,6 +44,7 @@ def _prepare_messages(
     question: str,
     session_id: str | None,
     user_id: int | None,
+    user_role: str,
 ) -> list[BaseMessage]:
     if (session_id is None) != (user_id is None):
         raise ValueError("session_id and user_id must be provided together")
@@ -43,14 +54,43 @@ def _prepare_messages(
         history = session_memory.get_langchain_history(
             session_id=session_id,
             user_id=user_id,
+            user_role=user_role,
         )
         session_memory.add_message(
             session_id=session_id,
             user_id=user_id,
             role="user",
             content=question,
+            user_role=user_role,
         )
     return [*history, HumanMessage(content=question)]
+
+
+def _message_text(message: BaseMessage) -> str:
+    content = message.content
+    if isinstance(content, str):
+        return content
+    return " ".join(str(block) for block in content)
+
+
+def _estimated_tokens(message: BaseMessage) -> int:
+    """Use a conservative four-characters-per-token estimate."""
+    return max(1, (len(_message_text(message)) + 3) // 4) + 8
+
+
+def _trim_messages_to_token_budget(
+    messages: list[BaseMessage],
+) -> list[BaseMessage]:
+    """Keep the newest complete messages within the configured input budget."""
+    selected: list[BaseMessage] = []
+    used_tokens = 0
+    for message in reversed(messages):
+        message_tokens = _estimated_tokens(message)
+        if selected and used_tokens + message_tokens > chatbot_settings.max_input_tokens:
+            break
+        selected.append(message)
+        used_tokens += message_tokens
+    return list(reversed(selected))
 
 
 def _final_answer(messages: list[BaseMessage]) -> str:
@@ -106,25 +146,48 @@ def answer_with_policy_agent(
     *,
     session_id: str | None = None,
     user_id: int | None = None,
+    user_role: str = "employee",
 ) -> dict[str, object]:
     """Run the policy agent until it returns a final answer."""
-    cleaned_question = question.strip()
+    role = user_role.strip().lower()
+    if (session_id is None) != (user_id is None):
+        raise ValueError("session_id and user_id must be provided together")
+    if session_id is not None and user_id is not None:
+        session_memory.validate_identity(
+            session_id=session_id,
+            user_id=user_id,
+            user_role=role,
+        )
+    try:
+        cleaned_question = validate_input_text(question)
+    except ContentModerationError:
+        result: dict[str, object] = {
+            "answer": MODERATION_FALLBACK,
+            "sources": [],
+            "tools_used": [],
+        }
+        if session_id is not None:
+            result["session_id"] = session_id
+        return result
     if not cleaned_question:
         raise ValueError("question cannot be empty")
     if len(cleaned_question) > chatbot_settings.max_question_length:
         raise ValueError("question exceeds the configured length limit")
 
-    input_messages = _prepare_messages(
-        question=cleaned_question,
-        session_id=session_id,
-        user_id=user_id,
+    input_messages = _trim_messages_to_token_budget(
+        _prepare_messages(
+            question=cleaned_question,
+            session_id=session_id,
+            user_id=user_id,
+            user_role=role,
+        )
     )
-    execution = get_policy_agent_executor().invoke(
+    execution = get_policy_agent_executor(role).invoke(
         {"messages": input_messages},
         config={"recursion_limit": 12},
     )
     messages = list(execution.get("messages", []))
-    answer = _final_answer(messages)
+    answer = sanitize_output_text(_final_answer(messages))
     sources = _cited_sources(answer)
 
     result: dict[str, object] = {
@@ -139,6 +202,7 @@ def answer_with_policy_agent(
             user_id=user_id,
             role="assistant",
             content=memory_answer,
+            user_role=role,
         )
         result["session_id"] = session_id
     return result
@@ -172,6 +236,7 @@ def _interactive_chat(*, user_id: int, user_role: str) -> None:
             question,
             session_id=session_id,
             user_id=user_id,
+            user_role=user_role,
         )
         print("Agent: ", end="")
         _print_result(result)
@@ -195,7 +260,9 @@ def _main() -> None:
         return
     if not args.question:
         parser.error("question is required unless --interactive is used")
-    _print_result(answer_with_policy_agent(args.question))
+    _print_result(
+        answer_with_policy_agent(args.question, user_role=args.user_role)
+    )
 
 
 if __name__ == "__main__":

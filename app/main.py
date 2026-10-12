@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth_api import router as auth_router
+from app.chatbot_api import router as chatbot_router
 from app.database import get_db
 from app.dependencies import require_roles
 from app.employee_api import router as employee_router
@@ -269,3 +270,4 @@ app.include_router(masters)
 app.include_router(user_router)
 app.include_router(employee_router)
 app.include_router(auth_router)
+app.include_router(chatbot_router)
