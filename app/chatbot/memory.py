@@ -31,6 +31,10 @@ class SessionAccessError(PermissionError):
     pass
 
 
+class SessionRoleError(PermissionError):
+    pass
+
+
 class SensitiveMemoryError(ValueError):
     pass
 
@@ -88,6 +92,7 @@ class SessionMemoryStore:
         user_id: int,
         role: MessageRole,
         content: str,
+        user_role: str | None = None,
     ) -> None:
         cleaned_content = content.strip()
         if not cleaned_content:
@@ -101,7 +106,9 @@ class SessionMemoryStore:
 
         now = datetime.now(UTC)
         with self._lock:
-            session = self._get_owned_session(session_id, user_id, now)
+            session = self._get_owned_session(
+                session_id, user_id, now, user_role=user_role
+            )
             session.messages.append(
                 MemoryMessage(role=role, content=cleaned_content, created_at=now)
             )
@@ -114,10 +121,13 @@ class SessionMemoryStore:
         *,
         session_id: str,
         user_id: int,
+        user_role: str | None = None,
     ) -> list[MemoryMessage]:
         now = datetime.now(UTC)
         with self._lock:
-            session = self._get_owned_session(session_id, user_id, now)
+            session = self._get_owned_session(
+                session_id, user_id, now, user_role=user_role
+            )
             session.expires_at = now + timedelta(
                 minutes=chatbot_settings.session_ttl_minutes
             )
@@ -128,8 +138,13 @@ class SessionMemoryStore:
         *,
         session_id: str,
         user_id: int,
+        user_role: str | None = None,
     ) -> list[BaseMessage]:
-        history = self.get_history(session_id=session_id, user_id=user_id)
+        history = self.get_history(
+            session_id=session_id,
+            user_id=user_id,
+            user_role=user_role,
+        )
         return [
             HumanMessage(content=message.content)
             if message.role == "user"
@@ -137,17 +152,44 @@ class SessionMemoryStore:
             for message in history
         ]
 
-    def clear_session(self, *, session_id: str, user_id: int) -> None:
+    def clear_session(
+        self,
+        *,
+        session_id: str,
+        user_id: int,
+        user_role: str | None = None,
+    ) -> None:
         now = datetime.now(UTC)
         with self._lock:
-            self._get_owned_session(session_id, user_id, now)
+            self._get_owned_session(
+                session_id, user_id, now, user_role=user_role
+            )
             del self._sessions[session_id]
+
+    def validate_identity(
+        self,
+        *,
+        session_id: str,
+        user_id: int,
+        user_role: str,
+    ) -> None:
+        """Confirm that a live session belongs to the authenticated identity."""
+        now = datetime.now(UTC)
+        with self._lock:
+            self._get_owned_session(
+                session_id,
+                user_id,
+                now,
+                user_role=user_role,
+            )
 
     def _get_owned_session(
         self,
         session_id: str,
         user_id: int,
         now: datetime,
+        *,
+        user_role: str | None = None,
     ) -> ChatSession:
         self._remove_expired(now)
         session = self._sessions.get(session_id)
@@ -155,6 +197,8 @@ class SessionMemoryStore:
             raise SessionNotFoundError("Chat session was not found or has expired")
         if session.user_id != user_id:
             raise SessionAccessError("Chat session belongs to another user")
+        if user_role is not None and session.user_role != user_role.strip().lower():
+            raise SessionRoleError("Chat session role no longer matches the user")
         return session
 
     def _remove_expired(self, now: datetime) -> None:
