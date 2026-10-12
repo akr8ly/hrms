@@ -41,18 +41,37 @@ def _format_context(documents: list[Document]) -> str:
 
 def _overview_response(question: str) -> dict[str, object] | None:
     normalized = " ".join(question.lower().split())
-    if "all" not in normalized or "polic" not in normalized:
+    requests_all_policies = "all" in normalized and "polic" in normalized
+    category_phrase = normalized.rstrip(" ?.!")
+    for prefix in (
+        "what is ",
+        "what are ",
+        "explain ",
+        "tell me about ",
+        "show me ",
+    ):
+        if category_phrase.startswith(prefix):
+            category_phrase = category_phrase.removeprefix(prefix).strip()
+            break
+    category_phrase = category_phrase.removeprefix("the ").strip()
+
+    requested_category = None
+    for category, aliases in CATEGORY_ALIASES.items():
+        if requests_all_policies:
+            matches = any(alias in normalized for alias in aliases)
+        else:
+            matches = any(
+                category_phrase in {alias, f"{alias} policy", f"{alias} policies"}
+                for alias in aliases
+            )
+        if matches:
+            requested_category = category
+            break
+
+    if not requests_all_policies and requested_category is None:
         return None
 
     documents = load_policy_documents()
-    requested_category = next(
-        (
-            category
-            for category, aliases in CATEGORY_ALIASES.items()
-            if any(alias in normalized for alias in aliases)
-        ),
-        None,
-    )
 
     if requested_category is None:
         categories: dict[str, int] = {}
