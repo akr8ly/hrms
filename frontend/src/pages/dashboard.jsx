@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/sidebar";
+import HRChatbotWidget from "../components/chatbot";
 import { API_BASE_URL } from "../api";
 import { EmployeesPage, MastersPage, UsersPage } from "../components/management";
 
@@ -62,6 +63,7 @@ function Dashboard() {
         {error && <p className="error-message">{error}</p>}
         {activeItem === "Employees" ? <EmployeesPage token={token} role={user.role} /> : activeItem === "Masters" && user.role === "admin" ? <MastersPage token={token} /> : activeItem === "Users" && user.role === "admin" ? <UsersPage token={token} /> : activeItem === "My Profile" ? <Profile profile={profile} token={token} onUpdate={setProfile} onPasswordChanged={logout} /> : <section className="dashboard-card"><span>{activeItem}</span><h2>{activeItem}</h2><p>{sectionDescription(user.role, activeItem)}</p></section>}
       </main>
+      <HRChatbotWidget token={token} role={user.role} />
     </div>
   );
 }
