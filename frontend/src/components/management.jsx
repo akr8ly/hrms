@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
 import { API_BASE_URL } from "../api";
 
+function ActionIcon({ name }) {
+  const paths = {
+    save: <><path d="M5 3h12l2 2v16H5z" /><path d="M8 3v6h8V3M8 21v-8h8v8" /></>,
+    approve: <><path d="m5 12 4 4L19 6" /></>,
+    reject: <><path d="M18 6 6 18M6 6l12 12" /></>,
+    edit: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /></>,
+    delete: <><path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v5M14 11v5" /></>,
+  };
+  return <svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
+}
+
 const masterTypes = {
   divisions: { label: "Divisions", fields: ["code", "name", "description"] },
   departments: { label: "Departments", fields: ["code", "name", "description"] },
@@ -110,23 +121,27 @@ export function MastersPage({ token }) {
 }
 
 export function UsersPage({ token }) {
+  const pageSize = 25;
   const [users, setUsers] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [message, setMessage] = useState("");
+  const [page, setPage] = useState(0);
+  const [hasNextPage, setHasNextPage] = useState(false);
 
   async function load() {
     try {
       const [data, roles] = await Promise.all([
-        apiRequest("/admin/users?limit=100", token),
+        apiRequest(`/admin/users?limit=${pageSize}&offset=${page * pageSize}`, token),
         apiRequest("/admin/roles", token),
       ]);
       const roleNames = Object.fromEntries(roles.map((role) => [role.id, role.name]));
       const usersWithRoles = data.map((user) => ({ ...user, role: roleNames[user.role_id] }));
       setUsers(usersWithRoles);
+      setHasNextPage(data.length === pageSize);
       setDrafts(Object.fromEntries(usersWithRoles.map((user) => [user.id, { role: user.role, employee_id: user.employee_id ?? "" }])));
     } catch (error) { setMessage(error.message); }
   }
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function action(userId, verb) {
     try {
@@ -141,7 +156,7 @@ export function UsersPage({ token }) {
     } catch (error) { setMessage(error.message); }
   }
 
-  return <section className="management-page"><div className="section-heading"><div><span>Administration</span><h2>Users and approvals</h2></div></div>{message && <p className="inline-message">{message}</p>}<div className="table-wrap"><table className="management-table"><thead><tr><th>User</th><th>Role</th><th>Employee ID</th><th>Status</th><th>Actions</th></tr></thead><tbody>{users.map((user) => <tr key={user.id}><td data-label="User"><strong>{user.username}</strong><small>#{user.id}</small></td><td data-label="Role"><select value={drafts[user.id]?.role ?? user.role} onChange={(e) => setDrafts({ ...drafts, [user.id]: { ...drafts[user.id], role: e.target.value } })}><option>admin</option><option>employee</option><option>query</option></select></td><td data-label="Employee ID"><input className="compact-input" type="number" placeholder="Not linked" value={drafts[user.id]?.employee_id ?? ""} onChange={(e) => setDrafts({ ...drafts, [user.id]: { ...drafts[user.id], employee_id: e.target.value } })} /></td><td data-label="Status"><em className={`status ${user.approval_status}`}>{user.approval_status}</em></td><td data-label="Actions"><div className="row-actions"><button onClick={() => action(user.id, "save")}>Save</button>{user.approval_status !== "approved" && <button onClick={() => action(user.id, "approve")}>Approve</button>}{user.approval_status !== "rejected" && <button className="danger" onClick={() => action(user.id, "reject")}>Reject</button>}</div></td></tr>)}</tbody></table></div></section>;
+  return <section className="management-page"><div className="section-heading"><div><span>Administration</span><h2>Users and approvals</h2><p>Review registrations, assign roles and link employee records.</p></div></div>{message && <p className="inline-message">{message}</p>}<div className="table-wrap approval-table-wrap"><table className="management-table approval-table"><thead><tr><th>User</th><th>Role</th><th>Employee ID</th><th>Status</th><th>Actions</th></tr></thead><tbody>{users.map((user) => <tr key={user.id}><td data-label="User"><strong>{user.username}</strong><small>#{user.id}</small></td><td data-label="Role"><select value={drafts[user.id]?.role ?? user.role} onChange={(e) => setDrafts({ ...drafts, [user.id]: { ...drafts[user.id], role: e.target.value } })}><option>admin</option><option>employee</option><option>query</option></select></td><td data-label="Employee ID"><input className="compact-input" type="number" placeholder="Not linked" value={drafts[user.id]?.employee_id ?? ""} onChange={(e) => setDrafts({ ...drafts, [user.id]: { ...drafts[user.id], employee_id: e.target.value } })} /></td><td data-label="Status"><em className={`status ${user.approval_status}`}>{user.approval_status}</em></td><td data-label="Actions"><div className="row-actions"><button className="icon-button" onClick={() => action(user.id, "save")}><ActionIcon name="save" />Save</button>{user.approval_status !== "approved" && <button className="icon-button" onClick={() => action(user.id, "approve")}><ActionIcon name="approve" />Approve</button>}{user.approval_status !== "rejected" && <button className="danger icon-button" onClick={() => action(user.id, "reject")}><ActionIcon name="reject" />Reject</button>}</div></td></tr>)}</tbody></table></div><div className="table-pagination"><span>Page {page + 1} · Up to {pageSize} users</span><div><button type="button" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>Previous</button><button type="button" disabled={!hasNextPage} onClick={() => setPage((value) => value + 1)}>Next</button></div></div></section>;
 }
 
 const employeeFields = ["employee_code", "first_name", "last_name", "date_of_birth", "personal_email", "work_email", "phone_number", "residential_address", "date_of_joining", "employment_type", "employment_status", "division_id", "department_id", "designation_id", "location_id", "office_address_id", "reporting_manager_id"];
@@ -213,5 +228,5 @@ export function EmployeesPage({ token, role }) {
 }
 
 function DataTable({ rows, columns, onEdit, onDelete }) {
-  return <div className="table-wrap"><table className="management-table"><thead><tr><th>ID</th>{columns.map((column) => <th key={column}>{column.replaceAll("_", " ")}</th>)}{(onEdit || onDelete) && <th>Actions</th>}</tr></thead><tbody>{rows.length === 0 ? <tr className="empty-row"><td colSpan={columns.length + 2}>No records found.</td></tr> : rows.map((row) => <tr key={row.id}><td data-label="ID">{row.id}</td>{columns.map((column) => <td data-label={column.replaceAll("_", " ")} key={column}>{row[column] ?? "—"}</td>)}{(onEdit || onDelete) && <td data-label="Actions"><div className="row-actions">{onEdit && <button onClick={() => onEdit(row)}>Edit</button>}{onDelete && <button className="danger" onClick={() => onDelete(row.id)}>Delete</button>}</div></td>}</tr>)}</tbody></table></div>;
+  return <div className="table-wrap"><table className="management-table"><thead><tr><th>ID</th>{columns.map((column) => <th key={column}>{column.replaceAll("_", " ")}</th>)}{(onEdit || onDelete) && <th>Actions</th>}</tr></thead><tbody>{rows.length === 0 ? <tr className="empty-row"><td colSpan={columns.length + 2}>No records found.</td></tr> : rows.map((row) => <tr key={row.id}><td data-label="ID">{row.id}</td>{columns.map((column) => <td data-label={column.replaceAll("_", " ")} key={column}>{row[column] ?? "—"}</td>)}{(onEdit || onDelete) && <td data-label="Actions"><div className="row-actions">{onEdit && <button className="icon-button" onClick={() => onEdit(row)}><ActionIcon name="edit" />Edit</button>}{onDelete && <button className="danger icon-button" onClick={() => onDelete(row.id)}><ActionIcon name="delete" />Delete</button>}</div></td>}</tr>)}</tbody></table></div>;
 }
