@@ -11,6 +11,7 @@ body {
 .app-layout {
   display: flex;
   min-height: 100vh;
+  min-width: 0;
 }
 
 .sidebar {
@@ -62,6 +63,7 @@ body {
 
 main {
   flex: 1;
+  min-width: 0;
   padding: 32px;
 }
 
@@ -812,6 +814,70 @@ td small { display: block; margin-top: 3px; color: #94a3b8; }
 .chat-composer button:disabled { cursor: not-allowed; opacity: .45; }
 .chat-composer button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .chat-composer > small { display: block; margin-top: 7px; color: #94a3b8; font-size: 9px; text-align: center; }
+
+/* Responsive icon navigation */
+.sidebar {
+  width: 240px;
+  height: 100vh;
+  flex: 0 0 240px;
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 14px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #172554 0%, #172554 62%, #122047 100%);
+  transition: width .25s, flex-basis .25s, padding .25s;
+}
+
+.sidebar.collapsed { width: 80px; flex-basis: 80px; padding-inline: 12px; }
+.sidebar-brand { display: flex; min-height: 48px; align-items: center; gap: 11px; margin: 0 4px 18px; white-space: nowrap; }
+.sidebar-mark { display: grid; width: 42px; height: 42px; flex: 0 0 42px; place-items: center; color: #172554; font-size: 13px; font-weight: 850; letter-spacing: .04em; background: #e0f2fe; border-radius: 11px; }
+.sidebar-brand-copy { display: grid; gap: 2px; }
+.sidebar-brand-copy strong { font-size: 17px; letter-spacing: .02em; }
+.sidebar-brand-copy span { color: #a5b4d8; font-size: 10px; }
+.sidebar-toggle { display: flex; width: 100%; height: 40px; align-items: center; gap: 11px; margin-bottom: 18px; padding: 0 12px; color: #dbeafe; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .08); border-radius: 9px; cursor: pointer; white-space: nowrap; }
+.sidebar-toggle:hover { background: rgba(255, 255, 255, .13); }
+.sidebar-icon { width: 20px; height: 20px; flex: 0 0 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.panel-arrow { stroke-width: 1.6; }
+.sidebar nav { gap: 7px; }
+.sidebar nav button { display: flex; height: 45px; align-items: center; gap: 12px; padding: 0 13px; color: #dbeafe; border-radius: 10px; white-space: nowrap; transition: color .15s, background .15s, transform .15s; }
+.sidebar nav button:hover { color: #fff; background: rgba(255, 255, 255, .09); transform: translateX(2px); }
+.sidebar nav button.active { color: #fff; background: linear-gradient(100deg, #2563eb, #3b82f6); box-shadow: 0 8px 18px rgba(30, 64, 175, .25); }
+.sidebar-role { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 12px; white-space: nowrap; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .08); border-radius: 10px; }
+.sidebar-role-dot { width: 9px; height: 9px; flex: 0 0 9px; background: #4ade80; border-radius: 50%; box-shadow: 0 0 0 3px rgba(74, 222, 128, .12); }
+.sidebar-role div { display: grid; gap: 2px; }
+.sidebar-role small { color: #a5b4d8; font-size: 9px; }
+.sidebar-role strong { font-size: 12px; text-transform: capitalize; }
+.sidebar.collapsed .sidebar-brand-copy, .sidebar.collapsed .sidebar-toggle span, .sidebar.collapsed nav button span, .sidebar.collapsed .sidebar-role div { display: none; }
+.sidebar.collapsed .sidebar-brand { justify-content: center; margin-inline: 0; }
+.sidebar.collapsed .sidebar-toggle, .sidebar.collapsed nav button, .sidebar.collapsed .sidebar-role { justify-content: center; padding-inline: 0; }
+.sidebar.collapsed nav button:hover { transform: none; }
+.logout-button { display: inline-flex; align-items: center; gap: 8px; }
+.logout-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+@media (max-width: 800px) {
+  .sidebar, .sidebar.collapsed { width: 72px; flex-basis: 72px; padding-inline: 9px; }
+  .sidebar-brand-copy, .sidebar-toggle span, .sidebar nav button span, .sidebar-role div { display: none; }
+  .sidebar-toggle { display: none; }
+  .sidebar-brand { justify-content: center; margin-inline: 4px; }
+  .sidebar-mark { width: 40px; height: 40px; flex-basis: 40px; }
+  .sidebar-toggle, .sidebar nav button, .sidebar-role { justify-content: center; padding-inline: 0; }
+  .sidebar nav button:hover { transform: none; }
+  .page-header { flex-wrap: wrap; }
+  .page-header h1 { font-size: clamp(24px, 7vw, 30px); }
+  .dashboard-card, .management-page { max-width: 100%; }
+}
+
+@media (max-width: 430px) {
+  .sidebar, .sidebar.collapsed { width: 62px; flex-basis: 62px; padding-inline: 7px; }
+  .sidebar-mark { width: 38px; height: 38px; flex-basis: 38px; }
+  .sidebar-toggle, .sidebar nav button { height: 42px; }
+  main { padding: 20px 14px; }
+  .page-header { gap: 12px; }
+  .page-header p { margin-bottom: 0; font-size: 13px; }
+  .dashboard-card, .management-page { margin-top: 24px; padding: 20px; }
+}
 
 @media (max-width: 600px) {
   .hr-chat-widget { right: 14px; bottom: 14px; }
