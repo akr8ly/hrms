@@ -909,8 +909,6 @@ td small { display: block; margin-top: 3px; color: #94a3b8; }
 .approval-table tbody tr { transition: background .15s; }
 .approval-table tbody tr:nth-child(even) { background: #fbfdff; }
 .approval-table tbody tr:hover { background: #f0f7ff; }
-.approval-table th:first-child, .approval-table td:first-child { position: sticky; left: 0; z-index: 1; background: inherit; box-shadow: 8px 0 12px -12px rgba(15, 23, 42, .5); }
-.approval-table th:first-child { background: #f5f8fc; z-index: 2; }
 .approval-table td:first-child strong { color: #172554; }
 .approval-table .row-actions { min-width: 220px; }
 .approval-table .icon-button { min-height: 34px; padding: 7px 10px; }
@@ -918,6 +916,8 @@ td small { display: block; margin-top: 3px; color: #94a3b8; }
 .approval-table .status-pill.approved { background: #ecfdf3; }
 .approval-table .status-pill.pending { background: #fffbeb; }
 .approval-table .status-pill.rejected { background: #fff1f2; }
+.approval-scroll-note { display: none; align-items: center; gap: 7px; margin: -10px 0 9px; color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: .02em; }
+.approval-scroll-note svg { width: 15px; height: 15px; fill: none; stroke: #0284c7; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .table-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; color: #64748b; font-size: 12px; }
 .table-pagination > div { display: flex; gap: 8px; }
 .table-pagination button { padding: 8px 12px; color: #075985; font-weight: 700; background: #e0f2fe; border: 0; border-radius: 7px; cursor: pointer; }
@@ -925,6 +925,7 @@ td small { display: block; margin-top: 3px; color: #94a3b8; }
 
 @media (max-width: 800px) {
   .approval-heading { align-items: center; }
+  .approval-scroll-note { display: flex; }
   .approval-table { min-width: 720px; }
   .approval-table th, .approval-table td { padding: 11px 12px; }
   .approval-table .row-actions { min-width: 104px; }
