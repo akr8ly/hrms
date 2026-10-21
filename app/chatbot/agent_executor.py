@@ -33,7 +33,7 @@ from app.chatbot.tools import get_policy_tools
 
 POLICY_ID_PATTERN = re.compile(r"\[(POL-[A-Z]+-\d{3})\]")
 _CLEAR_FOLLOW_UP_PATTERN = re.compile(
-    r"^(?:how many days(?: can i take)?|what about (?:it|that|this)|"
+    r"^(?:how many(?: (?:days|hours|times))?(?: can i take)?|what about (?:it|that|this)|"
     r"does (?:it|that|this) apply|when can i take (?:it|that)|"
     r"and (?:what|how|when))\??$",
     re.IGNORECASE,
@@ -136,12 +136,20 @@ def _grounded_policy_answer(
 
     # The agent sees only the current user question. The retrieved IDs below
     # form the hard boundary for the answer it may return.
-    execution = get_policy_agent_executor(user_role).invoke(
-        {"messages": [HumanMessage(content=question)]},
-        config={"recursion_limit": 12},
-    )
-    messages = list(execution.get("messages", []))
-    answer = sanitize_output_text(_final_answer(messages))
+    #
+    # Local models can occasionally omit a final answer or citation after a
+    # successful tool call. In that case, return the highest ranked retrieved
+    # section verbatim instead of incorrectly claiming no policy was found.
+    messages: list[BaseMessage] = []
+    try:
+        execution = get_policy_agent_executor(user_role).invoke(
+            {"messages": [HumanMessage(content=question)]},
+            config={"recursion_limit": 12},
+        )
+        messages = list(execution.get("messages", []))
+        answer = sanitize_output_text(_final_answer(messages))
+    except Exception:
+        answer = NO_POLICY_ANSWER
     allowed_ids = {str(document.metadata["policy_id"]) for document in documents}
     cited_ids = set(POLICY_ID_PATTERN.findall(answer))
     if (
@@ -149,11 +157,7 @@ def _grounded_policy_answer(
         or not cited_ids
         or not cited_ids.issubset(allowed_ids)
     ):
-        return {
-            "answer": NO_POLICY_ANSWER,
-            "sources": [],
-            "tools_used": ["search_hr_policies"],
-        }
+        return _retrieved_section_fallback(documents[0])
 
     document_by_id = {
         str(document.metadata["policy_id"]): document for document in documents
@@ -169,6 +173,26 @@ def _grounded_policy_answer(
             for policy_id in dict.fromkeys(POLICY_ID_PATTERN.findall(answer))
         ],
         "tools_used": _tools_used(messages),
+    }
+
+
+def _retrieved_section_fallback(document) -> dict[str, object]:
+    """Return the highest-ranked policy section when the model cannot cite it."""
+    policy_id = str(document.metadata["policy_id"])
+    section = str(document.page_content).strip()
+    _, separator, body = section.partition("\n\n")
+    answer_body = body.strip() if separator and body.strip() else section
+    answer = sanitize_output_text(f"{answer_body} [{policy_id}]")
+    return {
+        "answer": answer,
+        "sources": [
+            {
+                "policy_id": policy_id,
+                "title": str(document.metadata["title"]),
+                "category": str(document.metadata["category"]),
+            }
+        ],
+        "tools_used": ["search_hr_policies"],
     }
 
 
