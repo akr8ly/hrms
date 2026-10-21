@@ -15,6 +15,7 @@ from app.models.location import Location
 
 
 ReportDimension = Literal[
+    "total",
     "department",
     "division",
     "designation",
@@ -72,7 +73,9 @@ def get_employee_analytics_report(**kwargs) -> dict[str, object]:
             db.scalar(select(func.count(Employee.id)).where(*conditions)) or 0
         )
 
-        if data.group_by in _MASTER_DIMENSIONS:
+        if data.group_by == "total":
+            groups = []
+        elif data.group_by in _MASTER_DIMENSIONS:
             model, employee_fk = _MASTER_DIMENSIONS[data.group_by]
             statement = (
                 select(
@@ -109,8 +112,10 @@ EMPLOYEE_ANALYTICS_TOOL = StructuredTool.from_function(
     func=get_employee_analytics_report,
     name="get_employee_analytics_report",
     description=(
-        "Admin-only read-only employee headcount report grouped by department, "
+        "Admin-only read-only employee headcount report. For a simple overall "
+        "employee count use group_by='total'. Otherwise group by department, "
         "division, designation, location, employment status, or employment type. "
+        "Optional filters can narrow the count. "
         "It never reads or returns employee PII."
     ),
     args_schema=EmployeeReportInput,

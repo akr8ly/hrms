@@ -5,7 +5,12 @@ import re
 from functools import lru_cache
 
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    ToolMessage,
+)
 
 from app.chatbot.config import chatbot_settings
 from app.chatbot.admin_tools import get_admin_tools
@@ -17,12 +22,28 @@ from app.chatbot.moderation import (
     sanitize_output_text,
     validate_input_text,
 )
+from app.chatbot.hybrid_search import retrieve_hybrid_policy_matches
 from app.chatbot.policy_loader import load_policy_documents
-from app.chatbot.prompts import NO_POLICY_ANSWER, get_agent_system_prompt
+from app.chatbot.prompts import (
+    NO_POLICY_ANSWER,
+    get_agent_system_prompt,
+)
 from app.chatbot.tools import get_policy_tools
 
 
 POLICY_ID_PATTERN = re.compile(r"\[(POL-[A-Z]+-\d{3})\]")
+_CLEAR_FOLLOW_UP_PATTERN = re.compile(
+    r"^(?:how many days(?: can i take)?|what about (?:it|that|this)|"
+    r"does (?:it|that|this) apply|when can i take (?:it|that)|"
+    r"and (?:what|how|when))\??$",
+    re.IGNORECASE,
+)
+_ANALYTICS_PATTERN = re.compile(
+    r"\b(?:headcount|employee count|employees? (?:are|work|exist)|"
+    r"how many employees|workforce|staff count|division[- ]wise|"
+    r"department[- ]wise|designation[- ]wise|location[- ]wise)\b",
+    re.IGNORECASE,
+)
 
 
 @lru_cache(maxsize=3)
@@ -64,6 +85,95 @@ def _prepare_messages(
             user_role=user_role,
         )
     return [*history, HumanMessage(content=question)]
+
+
+def _is_clear_follow_up(question: str) -> bool:
+    """Allow history to clarify only short, explicitly referential questions."""
+    normalized = " ".join(question.strip().split())
+    return bool(_CLEAR_FOLLOW_UP_PATTERN.fullmatch(normalized))
+
+
+def _current_policy_retrieval_question(
+    question: str,
+    history: list[BaseMessage],
+) -> str:
+    """Use the current turn unless a narrow follow-up needs its prior question."""
+    if not history or not _is_clear_follow_up(question):
+        return question
+
+    prior_question = next(
+        (
+            _message_text(message)
+            for message in reversed(history)
+            if isinstance(message, HumanMessage)
+        ),
+        "",
+    ).strip()
+    if not prior_question:
+        return question
+    return f"{prior_question}\nFollow-up: {question}"
+
+
+def _grounded_policy_answer(
+    question: str,
+    *,
+    retrieval_question: str,
+    user_role: str,
+) -> dict[str, object]:
+    """Answer from this turn's retrieved policy sections only."""
+    matches = retrieve_hybrid_policy_matches(retrieval_question, top_k=10)
+    documents = [
+        match.document
+        for match in matches
+        if match.score >= chatbot_settings.min_relevance_score
+    ]
+    if not documents:
+        return {
+            "answer": NO_POLICY_ANSWER,
+            "sources": [],
+            "tools_used": ["search_hr_policies"],
+        }
+
+    # The agent sees only the current user question. The retrieved IDs below
+    # form the hard boundary for the answer it may return.
+    execution = get_policy_agent_executor(user_role).invoke(
+        {"messages": [HumanMessage(content=question)]},
+        config={"recursion_limit": 12},
+    )
+    messages = list(execution.get("messages", []))
+    answer = sanitize_output_text(_final_answer(messages))
+    allowed_ids = {str(document.metadata["policy_id"]) for document in documents}
+    cited_ids = set(POLICY_ID_PATTERN.findall(answer))
+    if (
+        answer.rstrip(". ").casefold() == NO_POLICY_ANSWER.rstrip(". ").casefold()
+        or not cited_ids
+        or not cited_ids.issubset(allowed_ids)
+    ):
+        return {
+            "answer": NO_POLICY_ANSWER,
+            "sources": [],
+            "tools_used": ["search_hr_policies"],
+        }
+
+    document_by_id = {
+        str(document.metadata["policy_id"]): document for document in documents
+    }
+    return {
+        "answer": answer,
+        "sources": [
+            {
+                "policy_id": policy_id,
+                "title": str(document_by_id[policy_id].metadata["title"]),
+                "category": str(document_by_id[policy_id].metadata["category"]),
+            }
+            for policy_id in dict.fromkeys(POLICY_ID_PATTERN.findall(answer))
+        ],
+        "tools_used": _tools_used(messages),
+    }
+
+
+def _is_admin_analytics_question(question: str, role: str) -> bool:
+    return role == "admin" and bool(_ANALYTICS_PATTERN.search(question))
 
 
 def _message_text(message: BaseMessage) -> str:
@@ -174,29 +284,43 @@ def answer_with_policy_agent(
     if len(cleaned_question) > chatbot_settings.max_question_length:
         raise ValueError("question exceeds the configured length limit")
 
-    input_messages = _trim_messages_to_token_budget(
-        _prepare_messages(
-            question=cleaned_question,
-            session_id=session_id,
-            user_id=user_id,
+    prepared_messages = _prepare_messages(
+        question=cleaned_question,
+        session_id=session_id,
+        user_id=user_id,
+        user_role=role,
+    )
+    history = prepared_messages[:-1]
+
+    if _is_admin_analytics_question(cleaned_question, role):
+        # Analytics is the only path that needs the tool-calling agent. Do not
+        # give it old policy answers, which cannot be evidence for a report.
+        execution = get_policy_agent_executor(role).invoke(
+            {"messages": [HumanMessage(content=cleaned_question)]},
+            config={"recursion_limit": 12},
+        )
+        messages = list(execution.get("messages", []))
+        answer = sanitize_output_text(_final_answer(messages))
+        result: dict[str, object] = {
+            "answer": answer,
+            "sources": _cited_sources(answer),
+            "tools_used": _tools_used(messages),
+        }
+    else:
+        # The current question determines retrieval. History may only clarify a
+        # small set of explicit follow-ups and is never supplied to the model.
+        result = _grounded_policy_answer(
+            cleaned_question,
+            retrieval_question=_current_policy_retrieval_question(
+                cleaned_question,
+                history,
+            ),
             user_role=role,
         )
-    )
-    execution = get_policy_agent_executor(role).invoke(
-        {"messages": input_messages},
-        config={"recursion_limit": 12},
-    )
-    messages = list(execution.get("messages", []))
-    answer = sanitize_output_text(_final_answer(messages))
-    sources = _cited_sources(answer)
-
-    result: dict[str, object] = {
-        "answer": answer,
-        "sources": sources,
-        "tools_used": _tools_used(messages),
-    }
     if session_id is not None and user_id is not None:
-        memory_answer = answer[: chatbot_settings.max_memory_message_length]
+        memory_answer = str(result["answer"])[
+            : chatbot_settings.max_memory_message_length
+        ]
         session_memory.add_message(
             session_id=session_id,
             user_id=user_id,

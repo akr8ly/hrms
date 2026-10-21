@@ -29,7 +29,11 @@ def get_agent_system_prompt(user_role: str) -> str:
     role = user_role.strip().lower()
     admin_scope = (
         "You may use get_employee_analytics_report for aggregate, non-PII "
-        "employee headcounts. Never request, infer, expose, or reconstruct PII."
+        "employee headcounts. For questions asking only how many employees "
+        "there are, call it with group_by='total'. For a breakdown, use the "
+        "single requested group such as division or department. State the "
+        "returned total or counts clearly in a concise sentence. Never request, "
+        "infer, expose, or reconstruct PII."
         if role == "admin"
         else "Employee analytics are unavailable to this role. Never claim access."
     )
