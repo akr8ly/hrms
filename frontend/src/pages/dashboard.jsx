@@ -6,6 +6,12 @@ import { API_BASE_URL } from "../api";
 import { EmployeesPage, MastersPage, UsersPage } from "../components/management";
 
 
+function toPositiveEmployeeId(value) {
+  const employeeId = Number(value);
+  return Number.isSafeInteger(employeeId) && employeeId > 0 ? employeeId : null;
+}
+
+
 function Dashboard() {
   const [collapsed, setCollapsed] = useState(false);
   const [user, setUser] = useState(null);
@@ -40,7 +46,13 @@ function Dashboard() {
     async function loadSection() {
       if (!user) return;
       if (activeItem === "My Profile" && user.employee_id) {
-        const response = await fetch(`${API_BASE_URL}/employees/${user.employee_id}`, { headers: { Authorization: `Bearer ${token}` } });
+        const employeeId = toPositiveEmployeeId(user.employee_id);
+        if (employeeId === null) {
+          setProfile(null);
+          setError("Invalid employee profile reference.");
+          return;
+        }
+        const response = await fetch(`${API_BASE_URL}/employees/${employeeId}`, { headers: { Authorization: `Bearer ${token}` } });
         if (response.ok) setProfile(await response.json());
       }
     }
@@ -104,8 +116,13 @@ function Profile({ profile, token, onUpdate, onPasswordChanged }) {
     event.preventDefault();
     const payload = { ...form };
     if (photo) payload.employee_photo = photo;
+    const employeeId = toPositiveEmployeeId(profile.id);
+    if (employeeId === null) {
+      setMessage("Invalid employee profile reference.");
+      return;
+    }
     try {
-      const response = await fetch(`${API_BASE_URL}/employees/${profile.id}`, {
+      const response = await fetch(`${API_BASE_URL}/employees/${employeeId}`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(payload),
