@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_BASE_URL } from "../api";
+import { apiFetch } from "../api";
 
 function ActionIcon({ name }) {
   const paths = {
@@ -23,11 +23,10 @@ const masterTypes = {
   },
 };
 
-async function apiRequest(path, token, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+async function apiRequest(path, _token, options = {}) {
+  const response = await apiFetch(path, {
     ...options,
     headers: {
-      Authorization: `Bearer ${token}`,
       ...(options.body ? { "Content-Type": "application/json" } : {}),
       ...options.headers,
     },

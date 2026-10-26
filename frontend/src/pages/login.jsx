@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { API_BASE_URL } from "../api";
+import { apiFetch } from "../api";
 
 function Login() {
   const [form, setForm] = useState({
@@ -24,8 +24,8 @@ function Login() {
     setError("");
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/auth/login`,
+      const response = await apiFetch(
+        "/auth/login",
         {
           method: "POST",
           headers: {
@@ -42,7 +42,6 @@ function Login() {
         return;
       }
 
-      localStorage.setItem("access_token", data.access_token);
       navigate("/dashboard");
     } catch {
       setError("Cannot connect to the HRMS API");

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { API_BASE_URL } from "../api";
+import { apiFetch } from "../api";
 
 const WELCOME_MESSAGE = {
   id: "welcome",
@@ -56,7 +56,7 @@ function parseEventBlock(block) {
   return { event, data: JSON.parse(dataLines.join("\n")) };
 }
 
-function HRChatbotWidget({ token, role }) {
+function HRChatbotWidget({ role }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([WELCOME_MESSAGE]);
   const [question, setQuestion] = useState("");
@@ -90,9 +90,8 @@ function HRChatbotWidget({ token, role }) {
   }, []);
 
   async function createSession() {
-    const response = await fetch(`${API_BASE_URL}/chatbot/sessions`, {
+    const response = await apiFetch("/chatbot/sessions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
     });
     if (!response.ok) {
       throw new Error(await readError(response, "Could not start an HR assistant session."));
@@ -109,10 +108,9 @@ function HRChatbotWidget({ token, role }) {
   }
 
   async function streamAnswer(text, activeSession, assistantId, canRetry = true) {
-    const response = await fetch(`${API_BASE_URL}/chatbot/message/stream`, {
+    const response = await apiFetch("/chatbot/message/stream", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ session_id: activeSession, question: text }),

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -24,6 +24,7 @@ from app.schemas.user import (
     CurrentUserRead,
 )
 from app.security import (
+    auth_settings,
     hash_password,
     normalize_security_answer,
     verify_password,
@@ -116,6 +117,7 @@ def register(
 @router.post("/login", response_model=TokenResponse)
 def login(
     data: UserLogin,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     user = db.scalar(
@@ -136,8 +138,26 @@ def login(
     if user.approval_status == "rejected":
         raise HTTPException(403, "Your registration was rejected by an administrator")
 
-    return TokenResponse(
-        access_token=create_access_token(user.id)
+    access_token = create_access_token(user.id)
+    response.set_cookie(
+        key="hrms_access_token",
+        value=access_token,
+        httponly=True,
+        secure=auth_settings.auth_cookie_secure,
+        samesite="lax",
+        max_age=30 * 60,
+        path="/",
+    )
+    return TokenResponse(access_token=access_token)
+
+
+@router.post("/logout", status_code=204)
+def logout(response: Response):
+    response.delete_cookie(
+        key="hrms_access_token",
+        secure=auth_settings.auth_cookie_secure,
+        samesite="lax",
+        path="/",
     )
 
 

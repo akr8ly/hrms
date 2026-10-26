@@ -1,5 +1,5 @@
 import jwt
-from fastapi import Depends, HTTPException
+from fastapi import Cookie, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -11,7 +11,9 @@ from app.models.role import Role
 bearer_scheme = HTTPBearer(auto_error=False)
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    cookie_token: str | None = Cookie(default=None, alias="hrms_access_token"),
     db: Session = Depends(get_db),
 ) -> User:
     unauthorized = HTTPException(
@@ -20,12 +22,19 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    if credentials is None:
+    if credentials is None and cookie_token is None:
         raise unauthorized
+
+    # Cookie authentication is used by the browser. Protect unsafe requests
+    # against cross-site submission while retaining bearer auth for Swagger
+    # and external API clients.
+    if credentials is None and request.method not in {"GET", "HEAD", "OPTIONS"}:
+        if request.headers.get("origin") not in auth_settings.frontend_origins:
+            raise HTTPException(403, "Request origin is not allowed")
 
     try:
         payload = jwt.decode(
-            credentials.credentials,
+            credentials.credentials if credentials is not None else cookie_token,
             auth_settings.jwt_secret_key.get_secret_value(),
             algorithms=["HS256"],
             options={"require": ["sub", "iat", "exp"]},

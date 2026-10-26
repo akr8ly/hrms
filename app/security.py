@@ -27,6 +27,12 @@ class AuthSettings(BaseSettings):
     )
 
     jwt_secret_key: SecretStr = Field(min_length=32)
+    auth_cookie_secure: bool = False
+    allowed_frontend_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+
+    @property
+    def frontend_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.allowed_frontend_origins.split(",") if origin.strip()]
 
 
 auth_settings = AuthSettings()

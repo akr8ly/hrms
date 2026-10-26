@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/sidebar";
 import HRChatbotWidget from "../components/chatbot";
-import { API_BASE_URL } from "../api";
+import { apiFetch } from "../api";
 import { EmployeesPage, MastersPage, UsersPage } from "../components/management";
 
 
@@ -19,18 +19,12 @@ function Dashboard() {
   const [error, setError] = useState("");
   const [activeItem, setActiveItem] = useState("Dashboard");
   const navigate = useNavigate();
-  const token = localStorage.getItem("access_token");
 
   useEffect(() => {
     async function loadUser() {
-      if (!token) {
-        navigate("/login");
-        return;
-      }
       try {
-        const response = await fetch(`${API_BASE_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+        const response = await apiFetch("/auth/me");
         if (!response.ok) {
-          localStorage.removeItem("access_token");
           navigate("/login");
           return;
         }
@@ -40,7 +34,7 @@ function Dashboard() {
       }
     }
     loadUser();
-  }, [navigate, token]);
+  }, [navigate]);
 
   useEffect(() => {
     async function loadSection() {
@@ -52,15 +46,15 @@ function Dashboard() {
           setError("Invalid employee profile reference.");
           return;
         }
-        const response = await fetch(`${API_BASE_URL}/employees/${employeeId}`, { headers: { Authorization: `Bearer ${token}` } });
+        const response = await apiFetch(`/employees/${employeeId}`);
         if (response.ok) setProfile(await response.json());
       }
     }
     loadSection();
-  }, [activeItem, token, user]);
+  }, [activeItem, user]);
 
-  function logout() {
-    localStorage.removeItem("access_token");
+  async function logout() {
+    await apiFetch("/auth/logout", { method: "POST" }).catch(() => undefined);
     navigate("/login");
   }
 
@@ -73,15 +67,15 @@ function Dashboard() {
       <main>
         <div className="page-header"><div><h1>HRMS Dashboard</h1><p>Welcome, {user.username}. Your role is {user.role}.</p></div><button className="logout-button" onClick={logout}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /></svg><span>Logout</span></button></div>
         {error && <p className="error-message">{error}</p>}
-        {activeItem === "Employees" ? <EmployeesPage token={token} role={user.role} /> : activeItem === "Masters" && user.role === "admin" ? <MastersPage token={token} /> : activeItem === "Users" && user.role === "admin" ? <UsersPage token={token} /> : activeItem === "My Profile" ? <Profile profile={profile} token={token} onUpdate={setProfile} onPasswordChanged={logout} /> : <section className="dashboard-card"><span>{activeItem}</span><h2>{activeItem}</h2><p>{sectionDescription(user.role, activeItem)}</p></section>}
+        {activeItem === "Employees" ? <EmployeesPage role={user.role} /> : activeItem === "Masters" && user.role === "admin" ? <MastersPage /> : activeItem === "Users" && user.role === "admin" ? <UsersPage /> : activeItem === "My Profile" ? <Profile profile={profile} onUpdate={setProfile} onPasswordChanged={logout} /> : <section className="dashboard-card"><span>{activeItem}</span><h2>{activeItem}</h2><p>{sectionDescription(user.role, activeItem)}</p></section>}
       </main>
-      <HRChatbotWidget token={token} role={user.role} />
+      <HRChatbotWidget role={user.role} />
     </div>
   );
 }
 
 
-function Profile({ profile, token, onUpdate, onPasswordChanged }) {
+function Profile({ profile, onUpdate, onPasswordChanged }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ personal_email: "", phone_number: "", residential_address: "" });
   const [photo, setPhoto] = useState(null);
@@ -122,9 +116,9 @@ function Profile({ profile, token, onUpdate, onPasswordChanged }) {
       return;
     }
     try {
-      const response = await fetch(`${API_BASE_URL}/employees/${employeeId}`, {
+      const response = await apiFetch(`/employees/${employeeId}`, {
         method: "PATCH",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const data = await response.json();
@@ -137,11 +131,11 @@ function Profile({ profile, token, onUpdate, onPasswordChanged }) {
     }
   }
 
-  return <section className="dashboard-card profile-card"><span>Employee profile</span><div className="profile-summary">{profile.employee_photo ? <img className="profile-photo" src={profile.employee_photo} alt="Employee" /> : <div className="profile-placeholder">{profile.first_name[0]}{profile.last_name[0]}</div>}<div><h2>{profile.first_name} {profile.last_name}</h2><p>{profile.employee_code} · {profile.work_email}</p></div></div>{message && <p className="inline-message profile-message">{message}</p>}{editing ? <form className="profile-form" onSubmit={save}><label>Personal email<input type="email" required value={form.personal_email} onChange={(event) => setForm({ ...form, personal_email: event.target.value })} /></label><label>Phone number<input type="tel" required minLength="8" maxLength="20" value={form.phone_number} onChange={(event) => setForm({ ...form, phone_number: event.target.value })} /></label><label>Residential address<textarea required maxLength="500" value={form.residential_address} onChange={(event) => setForm({ ...form, residential_address: event.target.value })} /></label><div className="photo-upload-field"><span>Replace photo</span><label className="file-picker"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => readPhoto(event.target.files[0])} /><span className="file-picker-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.5V19a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2.5M8 9l4-4 4 4M12 5v11" /></svg>Choose image</span><span className="file-picker-name">{photoName || "PNG, JPG or WebP"}</span></label></div>{photoSource && <PhotoEditor source={photoSource} onChange={setPhoto} />}<div className="form-actions"><button className="icon-button" type="submit"><svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5z" /><path d="M8 3v6h8V3M8 21v-8h8v8" /></svg>Save profile</button><button type="button" className="secondary" onClick={() => setEditing(false)}>Cancel</button></div></form> : <div className="profile-details"><div><small>Personal email</small><strong>{profile.personal_email}</strong></div><div><small>Phone</small><strong>{profile.phone_number}</strong></div><div className="full-detail"><small>Residential address</small><strong>{profile.residential_address}</strong></div><button className="icon-button" onClick={beginEdit}><svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>Edit profile</button></div>}<PasswordChange token={token} onChanged={onPasswordChanged} /></section>;
+  return <section className="dashboard-card profile-card"><span>Employee profile</span><div className="profile-summary">{profile.employee_photo ? <img className="profile-photo" src={profile.employee_photo} alt="Employee" /> : <div className="profile-placeholder">{profile.first_name[0]}{profile.last_name[0]}</div>}<div><h2>{profile.first_name} {profile.last_name}</h2><p>{profile.employee_code} · {profile.work_email}</p></div></div>{message && <p className="inline-message profile-message">{message}</p>}{editing ? <form className="profile-form" onSubmit={save}><label>Personal email<input type="email" required value={form.personal_email} onChange={(event) => setForm({ ...form, personal_email: event.target.value })} /></label><label>Phone number<input type="tel" required minLength="8" maxLength="20" value={form.phone_number} onChange={(event) => setForm({ ...form, phone_number: event.target.value })} /></label><label>Residential address<textarea required maxLength="500" value={form.residential_address} onChange={(event) => setForm({ ...form, residential_address: event.target.value })} /></label><div className="photo-upload-field"><span>Replace photo</span><label className="file-picker"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => readPhoto(event.target.files[0])} /><span className="file-picker-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.5V19a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2.5M8 9l4-4 4 4M12 5v11" /></svg>Choose image</span><span className="file-picker-name">{photoName || "PNG, JPG or WebP"}</span></label></div>{photoSource && <PhotoEditor source={photoSource} onChange={setPhoto} />}<div className="form-actions"><button className="icon-button" type="submit"><svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5z" /><path d="M8 3v6h8V3M8 21v-8h8v8" /></svg>Save profile</button><button type="button" className="secondary" onClick={() => setEditing(false)}>Cancel</button></div></form> : <div className="profile-details"><div><small>Personal email</small><strong>{profile.personal_email}</strong></div><div><small>Phone</small><strong>{profile.phone_number}</strong></div><div className="full-detail"><small>Residential address</small><strong>{profile.residential_address}</strong></div><button className="icon-button" onClick={beginEdit}><svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>Edit profile</button></div>}<PasswordChange onChanged={onPasswordChanged} /></section>;
 }
 
 
-function PasswordChange({ token, onChanged }) {
+function PasswordChange({ onChanged }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
   const [message, setMessage] = useState("");
@@ -156,9 +150,9 @@ function PasswordChange({ token, onChanged }) {
       return;
     }
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+      const response = await apiFetch("/auth/change-password", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ current_password: form.current_password, new_password: form.new_password }),
       });
       const data = response.status === 204 ? null : await response.json();

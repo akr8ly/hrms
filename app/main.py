@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth_api import router as auth_router
+from app.security import auth_settings
 from app.chatbot_api import router as chatbot_router
 from app.database import get_db
 from app.dependencies import require_roles
@@ -28,7 +29,7 @@ from app.user_api import router as user_router
 app = FastAPI(title="HRMS API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=auth_settings.frontend_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
