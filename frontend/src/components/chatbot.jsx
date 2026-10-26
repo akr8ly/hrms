@@ -193,7 +193,7 @@ function HRChatbotWidget({ role }) {
 
   function submit(event) {
     event.preventDefault();
-    sendQuestion(question);
+    void sendQuestion(question);
   }
 
   return (
@@ -242,7 +242,7 @@ function HRChatbotWidget({ role }) {
             <div className="chat-suggestions">
               <span>Popular questions</span>
               {prompts.map((prompt) => (
-                <button key={prompt} type="button" disabled={busy} onClick={() => sendQuestion(prompt)}>{prompt}</button>
+                <button key={prompt} type="button" disabled={busy} onClick={() => { void sendQuestion(prompt); }}>{prompt}</button>
               ))}
             </div>
           )}

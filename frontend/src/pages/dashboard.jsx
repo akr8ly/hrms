@@ -33,7 +33,7 @@ function Dashboard() {
         setError("Cannot connect to the HRMS API");
       }
     }
-    loadUser();
+    void loadUser();
   }, [navigate]);
 
   useEffect(() => {
@@ -50,11 +50,15 @@ function Dashboard() {
         if (response.ok) setProfile(await response.json());
       }
     }
-    loadSection();
+    void loadSection();
   }, [activeItem, user]);
 
   async function logout() {
-    await apiFetch("/auth/logout", { method: "POST" }).catch(() => undefined);
+    try {
+      await apiFetch("/auth/logout", { method: "POST" });
+    } catch {
+      // Navigate even if the session has already expired or the API is unavailable.
+    }
     navigate("/login");
   }
 

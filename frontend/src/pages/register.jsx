@@ -60,7 +60,7 @@ function Register() {
       }
     }
 
-    loadOptions();
+    void loadOptions();
   }, []);
 
   function handleChange(event) {
