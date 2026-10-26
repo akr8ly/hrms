@@ -1,15 +1,9 @@
-import re
 from pathlib import Path
 
 from langchain_core.documents import Document
 
 
 POLICIES_DIRECTORY = Path(__file__).resolve().parent / "policies"
-POLICY_HEADING = re.compile(
-    r"^##\s+(?P<policy_id>POL-[A-Z]+-\d{3}):\s+(?P<title>.+?)\s*$"
-)
-
-
 class PolicyFormatError(ValueError):
     """Raised when a policy Markdown file does not follow the indexed format."""
 
@@ -54,15 +48,16 @@ def parse_policy_file(policy_file: Path) -> list[Document]:
     current: dict[str, str | list[str]] | None = None
 
     for line_number, line in enumerate(lines, start=1):
-        match = POLICY_HEADING.match(line)
-        if match:
+        heading = _parse_policy_heading(line)
+        if heading is not None:
             if current is not None:
                 documents.append(
                     _build_document(current, policy_file, category, category_title)
                 )
+            policy_id, title = heading
             current = {
-                "policy_id": match.group("policy_id"),
-                "title": match.group("title").strip(),
+                "policy_id": policy_id,
+                "title": title,
                 "body": [],
             }
             continue
@@ -89,6 +84,31 @@ def parse_policy_file(policy_file: Path) -> list[Document]:
         )
 
     return documents
+
+
+def _parse_policy_heading(line: str) -> tuple[str, str] | None:
+    if not line.startswith("## "):
+        return None
+
+    policy_id, separator, title = line[3:].strip().partition(":")
+    policy_id = policy_id.strip()
+    title = title.strip()
+    parts = policy_id.split("-")
+
+    if (
+        not separator
+        or not title
+        or len(parts) != 3
+        or parts[0] != "POL"
+        or not parts[1].isascii()
+        or not parts[1].isalpha()
+        or not parts[1].isupper()
+        or len(parts[2]) != 3
+        or not parts[2].isdigit()
+    ):
+        return None
+
+    return policy_id, title
 
 
 def _find_category_title(lines: list[str], policy_file: Path) -> str:
