@@ -9,6 +9,13 @@ from app.chatbot.memory import create_chat_session, session_memory
 from app.chatbot.model import get_chat_model
 from app.chatbot.policy_loader import load_policy_documents
 from app.chatbot.prompts import NO_POLICY_ANSWER, RAG_SYSTEM_PROMPT
+from app.chatbot.moderation import (
+    ContentModerationError,
+    MODERATION_FALLBACK,
+    PROMPT_INJECTION_FALLBACK,
+    PromptInjectionError,
+    validate_input_text,
+)
 
 
 CATEGORY_ALIASES = {
@@ -184,7 +191,20 @@ def answer_policy_question(
     session_id: str | None = None,
     user_id: int | None = None,
 ) -> dict[str, object]:
-    cleaned_question = question.strip()
+    try:
+        cleaned_question = validate_input_text(question)
+    except ContentModerationError:
+        return _finish_result(
+            {"answer": MODERATION_FALLBACK, "sources": []},
+            session_id=session_id,
+            user_id=user_id,
+        )
+    except PromptInjectionError:
+        return _finish_result(
+            {"answer": PROMPT_INJECTION_FALLBACK, "sources": []},
+            session_id=session_id,
+            user_id=user_id,
+        )
     if not cleaned_question:
         raise ValueError("question cannot be empty")
     if len(cleaned_question) > chatbot_settings.max_question_length:

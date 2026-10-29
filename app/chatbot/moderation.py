@@ -12,10 +12,17 @@ MODERATION_FALLBACK = (
 UNSAFE_MODEL_OUTPUT_FALLBACK = (
     "I couldn't produce a safe final answer. Please try again."
 )
+PROMPT_INJECTION_FALLBACK = (
+    "I can only help with approved HR policies and permitted aggregate reports."
+)
 
 
 class ContentModerationError(ValueError):
     """Raised when a user message violates the chatbot language policy."""
+
+
+class PromptInjectionError(ValueError):
+    """Raised when a user message attempts to override assistant controls."""
 
 
 _PROHIBITED_PATTERNS = tuple(
@@ -30,6 +37,23 @@ _PROHIBITED_PATTERNS = tuple(
         r"\b(?:kill|hurt)\s+(?:yourself|himself|herself|them)\b",
     )
 )
+
+_PROMPT_INJECTION_PATTERNS = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        r"\b(?:ignore|disregard|override|bypass)\b.{0,80}\b(?:previous|prior|system|developer|all)\b.{0,80}\b(?:instruction|prompt|rule|policy)s?\b",
+        r"\b(?:reveal|show|print|repeat|dump|extract)\b.{0,80}\b(?:system|developer|hidden)\b.{0,40}\b(?:prompt|instruction|message)s?\b",
+        r"(?:<\s*/?system\s*>|###\s*(?:system|developer)|\[\s*(?:system|developer)\s*\])",
+        r"\b(?:jailbreak|do anything now|dan mode)\b",
+    )
+)
+
+_SYSTEM_OUTPUT_PATTERN = re.compile(
+    r"(?:tool handover contract|you are the hrms assistant for an authenticated|"
+    r"answer hr policy questions only from available read-only policy tools)",
+    re.IGNORECASE,
+)
+
 
 _PLANNING_OUTPUT_PATTERN = re.compile(
     r"^(?:okay[,!.]?\s*)?(?:"
@@ -48,9 +72,16 @@ def contains_prohibited_language(text: str) -> bool:
     return any(pattern.search(text) for pattern in _PROHIBITED_PATTERNS)
 
 
+def contains_prompt_injection(text: str) -> bool:
+    """Return whether text attempts to override assistant instructions."""
+    return any(pattern.search(text) for pattern in _PROMPT_INJECTION_PATTERNS)
+
+
 def validate_input_text(text: str) -> str:
-    """Normalize a user message and reject prohibited language."""
+    """Normalize a user message and reject unsafe instructions."""
     cleaned = text.strip()
+    if contains_prompt_injection(cleaned):
+        raise PromptInjectionError(PROMPT_INJECTION_FALLBACK)
     if contains_prohibited_language(cleaned):
         raise ContentModerationError(MODERATION_FALLBACK)
     return cleaned
@@ -86,7 +117,7 @@ def sanitize_output_text(text: str) -> str:
         return UNSAFE_MODEL_OUTPUT_FALLBACK
     if contains_prohibited_language(cleaned):
         return MODERATION_FALLBACK
-    if _PLANNING_OUTPUT_PATTERN.search(cleaned):
+    if _SYSTEM_OUTPUT_PATTERN.search(cleaned) or _PLANNING_OUTPUT_PATTERN.search(cleaned):
         return UNSAFE_MODEL_OUTPUT_FALLBACK
     return truncate_response_text(
         cleaned,

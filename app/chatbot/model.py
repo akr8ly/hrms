@@ -22,6 +22,7 @@ def get_chat_model() -> BaseChatModel:
         base_url=chatbot_settings.ollama_base_url,
         temperature=chatbot_settings.llm_temperature,
         num_predict=chatbot_settings.max_answer_tokens,
+        client_kwargs={"timeout": chatbot_settings.llm_timeout_seconds},
         reasoning=True,
         validate_model_on_init=True,
     )

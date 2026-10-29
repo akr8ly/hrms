@@ -40,6 +40,8 @@ class ChatbotSettings(BaseSettings):
     ollama_base_url: str = "http://127.0.0.1:11434"
     llm_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     max_answer_tokens: int = Field(default=2000, ge=100, le=8000)
+    llm_timeout_seconds: int = Field(default=60, ge=5, le=300)
+    agent_recursion_limit: int = Field(default=12, ge=2, le=32)
     llm_api_key: SecretStr | None = None
 
 

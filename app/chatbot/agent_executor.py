@@ -19,6 +19,8 @@ from app.chatbot.model import get_chat_model
 from app.chatbot.moderation import (
     ContentModerationError,
     MODERATION_FALLBACK,
+    PromptInjectionError,
+    PROMPT_INJECTION_FALLBACK,
     sanitize_output_text,
     validate_input_text,
 )
@@ -144,7 +146,7 @@ def _grounded_policy_answer(
     try:
         execution = get_policy_agent_executor(user_role).invoke(
             {"messages": [HumanMessage(content=question)]},
-            config={"recursion_limit": 12},
+            config={"recursion_limit": chatbot_settings.agent_recursion_limit},
         )
         messages = list(execution.get("messages", []))
         answer = sanitize_output_text(_final_answer(messages))
@@ -303,6 +305,15 @@ def answer_with_policy_agent(
         if session_id is not None:
             result["session_id"] = session_id
         return result
+    except PromptInjectionError:
+        result = {
+            "answer": PROMPT_INJECTION_FALLBACK,
+            "sources": [],
+            "tools_used": [],
+        }
+        if session_id is not None:
+            result["session_id"] = session_id
+        return result
     if not cleaned_question:
         raise ValueError("question cannot be empty")
     if len(cleaned_question) > chatbot_settings.max_question_length:
@@ -319,17 +330,24 @@ def answer_with_policy_agent(
     if _is_admin_analytics_question(cleaned_question, role):
         # Analytics is the only path that needs the tool-calling agent. Do not
         # give it old policy answers, which cannot be evidence for a report.
-        execution = get_policy_agent_executor(role).invoke(
-            {"messages": [HumanMessage(content=cleaned_question)]},
-            config={"recursion_limit": 12},
-        )
-        messages = list(execution.get("messages", []))
-        answer = sanitize_output_text(_final_answer(messages))
-        result: dict[str, object] = {
-            "answer": answer,
-            "sources": _cited_sources(answer),
-            "tools_used": _tools_used(messages),
-        }
+        try:
+            execution = get_policy_agent_executor(role).invoke(
+                {"messages": [HumanMessage(content=cleaned_question)]},
+                config={"recursion_limit": chatbot_settings.agent_recursion_limit},
+            )
+            messages = list(execution.get("messages", []))
+            answer = sanitize_output_text(_final_answer(messages))
+            result: dict[str, object] = {
+                "answer": answer,
+                "sources": _cited_sources(answer),
+                "tools_used": _tools_used(messages),
+            }
+        except Exception:
+            result = {
+                "answer": NO_POLICY_ANSWER,
+                "sources": [],
+                "tools_used": [],
+            }
     else:
         # The current question determines retrieval. History may only clarify a
         # small set of explicit follow-ups and is never supplied to the model.
