@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../api";
+import { readPhotoFile } from "../photoUpload";
 
 function Register() {
   const [form, setForm] = useState({
@@ -79,20 +80,21 @@ function Register() {
     }));
   }
 
-  function handlePhotoChange(event) {
+  async function handlePhotoChange(event) {
     const file = event.target.files[0];
     if (!file) {
       setEmployee((current) => ({ ...current, employee_photo: null }));
       return;
     }
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024) {
-      setError("Photo must be a JPEG, PNG or WebP file up to 2 MB");
+    try {
+      const photo = await readPhotoFile(file);
+      setEmployee((current) => ({ ...current, employee_photo: photo }));
+      setError("");
+    } catch (error) {
+      setEmployee((current) => ({ ...current, employee_photo: null }));
+      setError(error.message);
       event.target.value = "";
-      return;
     }
-    const reader = new FileReader();
-    reader.onload = () => setEmployee((current) => ({ ...current, employee_photo: reader.result }));
-    reader.readAsDataURL(file);
   }
 
   async function handleSubmit(event) {
@@ -300,7 +302,7 @@ function Register() {
                 </div>
                 <div className="full-width">
                   <label htmlFor="employee_photo">Employee photo (optional)</label>
-                  <input id="employee_photo" type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoChange} />
+                  <input id="employee_photo" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { void handlePhotoChange(event); }} />
                   {employee.employee_photo && <img className="photo-preview" src={employee.employee_photo} alt="Employee preview" />}
                 </div>
                 <div>

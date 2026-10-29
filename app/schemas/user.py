@@ -3,13 +3,16 @@ from typing import Literal
 
 from app.schemas.employee import EmployeeCreate
 
+
+USERNAME_PATTERN = r"^[A-Za-z0-9_]+$"
+
 class UserRegister(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     username: str = Field(
         min_length=3,
         max_length=50,
-        pattern=r"^[A-Za-z0-9_]+$",
+        pattern=USERNAME_PATTERN,
     )
 
     password: SecretStr = Field(
@@ -55,13 +58,13 @@ class CurrentUserRead(UserRead):
 class UserLogin(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    username: str = Field(min_length=3, max_length=50)
+    username: str = Field(min_length=3, max_length=50, pattern=USERNAME_PATTERN)
     password: SecretStr = Field(min_length=1, max_length=128)
 
 
 class ForgotPasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    username: str = Field(min_length=3, max_length=50)
+    username: str = Field(min_length=3, max_length=50, pattern=USERNAME_PATTERN)
 
 
 class SecurityQuestionResponse(BaseModel):
@@ -70,7 +73,7 @@ class SecurityQuestionResponse(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    username: str = Field(min_length=3, max_length=50)
+    username: str = Field(min_length=3, max_length=50, pattern=USERNAME_PATTERN)
     security_answer: SecretStr = Field(min_length=2, max_length=100)
     new_password: SecretStr = Field(min_length=7, max_length=15)
 

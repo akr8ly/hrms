@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
+import { readPhotoFile } from "../photoUpload";
 
 function ActionIcon({ name }) {
   const paths = {
@@ -204,12 +205,17 @@ export function EmployeesPage({ token, role }) {
     } catch (error) { setMessage(error.message); }
   }
 
-  function readPhoto(file) {
+  async function readPhoto(file) {
     if (!file) return;
-    setPhotoName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => setPhoto(reader.result);
-    reader.readAsDataURL(file);
+    try {
+      setPhoto(await readPhotoFile(file));
+      setPhotoName(file.name);
+      setMessage("");
+    } catch (error) {
+      setPhoto(null);
+      setPhotoName("");
+      setMessage(error.message);
+    }
   }
 
   async function remove(id) {
@@ -226,7 +232,7 @@ export function EmployeesPage({ token, role }) {
     return <input type={field.includes("date_") ? "date" : field.includes("email") ? "email" : "text"} required={!editingId} {...props} />;
   }
 
-  return <section className="management-page"><div className="section-heading"><div><span>People</span><h2>Employees</h2><p>{role === "query" ? "Read-only results with protected PII removed." : "Create, update and deactivate employee records."}</p></div></div>{message && <p className="inline-message">{message}</p>}{role === "admin" && <form className="crud-form employee-form" onSubmit={submit}>{employeeFields.map((field) => <label key={field}>{field.replaceAll("_", " ")}{fieldControl(field)}</label>)}<div className="photo-upload-field"><span>Employee photo</span><label className="file-picker"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => readPhoto(e.target.files[0])} /><span className="file-picker-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.5V19a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2.5M8 9l4-4 4 4M12 5v11" /></svg>Choose image</span><span className="file-picker-name">{photoName || "PNG, JPG or WebP"}</span></label></div><div className="form-actions"><button type="submit">{editingId ? "Save employee" : "Add employee"}</button>{editingId && <button type="button" className="secondary" onClick={() => { setEditingId(null); setForm(emptyFields(employeeFields)); setPhoto(null); setPhotoName(""); }}>Cancel</button>}</div></form>}<DataTable variant="employees" rows={rows} columns={["employee_code", "first_name", "last_name", "work_email", "employment_type", "employment_status"]} onEdit={role === "admin" ? edit : null} onDelete={role === "admin" ? remove : null} /></section>;
+  return <section className="management-page"><div className="section-heading"><div><span>People</span><h2>Employees</h2><p>{role === "query" ? "Read-only results with protected PII removed." : "Create, update and deactivate employee records."}</p></div></div>{message && <p className="inline-message">{message}</p>}{role === "admin" && <form className="crud-form employee-form" onSubmit={submit}>{employeeFields.map((field) => <label key={field}>{field.replaceAll("_", " ")}{fieldControl(field)}</label>)}<div className="photo-upload-field"><span>Employee photo</span><label className="file-picker"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => { void readPhoto(e.target.files[0]); }} /><span className="file-picker-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.5V19a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2.5M8 9l4-4 4 4M12 5v11" /></svg>Choose image</span><span className="file-picker-name">{photoName || "PNG, JPG or WebP"}</span></label></div><div className="form-actions"><button type="submit">{editingId ? "Save employee" : "Add employee"}</button>{editingId && <button type="button" className="secondary" onClick={() => { setEditingId(null); setForm(emptyFields(employeeFields)); setPhoto(null); setPhotoName(""); }}>Cancel</button>}</div></form>}<DataTable variant="employees" rows={rows} columns={["employee_code", "first_name", "last_name", "work_email", "employment_type", "employment_status"]} onEdit={role === "admin" ? edit : null} onDelete={role === "admin" ? remove : null} /></section>;
 }
 
 function DataTable({ rows, columns, onEdit, onDelete, variant = "masters" }) {

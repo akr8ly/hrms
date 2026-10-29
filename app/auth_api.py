@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -23,6 +25,7 @@ from app.schemas.user import (
     TokenResponse,
     CurrentUserRead,
 )
+from app.login_protection import LoginAttemptLimiter
 from app.security import (
     auth_settings,
     hash_password,
@@ -33,6 +36,32 @@ from app.security import (
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+audit_logger = logging.getLogger("hrms.security.audit")
+login_limiter = LoginAttemptLimiter(
+    max_attempts=auth_settings.login_max_attempts,
+    window_seconds=auth_settings.login_window_seconds,
+    lockout_seconds=auth_settings.login_lockout_seconds,
+)
+
+
+def login_limit_keys(request: Request, username: str) -> tuple[str, str]:
+    client_ip = request.client.host if request.client else "unknown"
+    normalized_username = username.casefold().strip()
+    return f"ip:{client_ip}", f"account:{normalized_username}"
+
+
+def reject_failed_login(request: Request, username: str) -> None:
+    keys = login_limit_keys(request, username)
+    retry_after = login_limiter.record_failure(*keys)
+    audit_logger.warning("event=login_failed username=%s ip=%s", username, request.client.host if request.client else "unknown")
+    if retry_after:
+        audit_logger.warning("event=login_locked username=%s ip=%s retry_after=%s", username, request.client.host if request.client else "unknown", retry_after)
+        raise HTTPException(
+            429,
+            "Too many login attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
 
 
 def master_rows(rows):
@@ -118,20 +147,35 @@ def register(
 def login(
     data: UserLogin,
     response: Response,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    keys = login_limit_keys(request, data.username)
+    retry_after = login_limiter.blocked(*keys)
+    if retry_after:
+        raise HTTPException(
+            429,
+            "Too many login attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     user = db.scalar(
         select(User).where(User.username == data.username)
     )
 
     if user is None:
+        reject_failed_login(request, data.username)
         raise HTTPException(401, "Invalid username or password")
 
     if not verify_password(
         data.password.get_secret_value(),
         user.password_hash,
     ):
+        reject_failed_login(request, data.username)
         raise HTTPException(401, "Invalid username or password")
+
+    login_limiter.record_success(*keys)
+    audit_logger.info("event=login_succeeded username=%s ip=%s", data.username, request.client.host if request.client else "unknown")
 
     if user.approval_status == "pending":
         raise HTTPException(403, "Your registration is awaiting administrator approval")
@@ -143,7 +187,7 @@ def login(
         key="hrms_access_token",
         value=access_token,
         httponly=True,
-        secure=auth_settings.auth_cookie_secure,
+        secure=auth_settings.cookie_secure,
         samesite="lax",
         max_age=30 * 60,
         path="/",
@@ -155,7 +199,7 @@ def login(
 def logout(response: Response):
     response.delete_cookie(
         key="hrms_access_token",
-        secure=auth_settings.auth_cookie_secure,
+        secure=auth_settings.cookie_secure,
         samesite="lax",
         path="/",
     )

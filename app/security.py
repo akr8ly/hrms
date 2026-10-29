@@ -28,11 +28,21 @@ class AuthSettings(BaseSettings):
 
     jwt_secret_key: SecretStr = Field(min_length=32)
     auth_cookie_secure: bool = False
+    enforce_https: bool = False
+    hsts_max_age_seconds: int = Field(default=31_536_000, ge=0)
+    trust_proxy_headers: bool = False
     allowed_frontend_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    login_max_attempts: int = Field(default=5, ge=3, le=20)
+    login_window_seconds: int = Field(default=900, ge=60, le=86_400)
+    login_lockout_seconds: int = Field(default=900, ge=60, le=86_400)
 
     @property
     def frontend_origins(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_frontend_origins.split(",") if origin.strip()]
+
+    @property
+    def cookie_secure(self) -> bool:
+        return self.auth_cookie_secure or self.enforce_https
 
 
 auth_settings = AuthSettings()

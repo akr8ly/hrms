@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/sidebar";
 import HRChatbotWidget from "../components/chatbot";
 import { apiFetch } from "../api";
+import { readPhotoFile } from "../photoUpload";
 import { EmployeesPage, MastersPage, UsersPage } from "../components/management";
 
 
@@ -102,12 +103,18 @@ function Profile({ profile, onUpdate, onPasswordChanged }) {
     setEditing(true);
   }
 
-  function readPhoto(file) {
+  async function readPhoto(file) {
     if (!file) return;
-    setPhotoName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => setPhotoSource(reader.result);
-    reader.readAsDataURL(file);
+    try {
+      setPhotoSource(await readPhotoFile(file));
+      setPhotoName(file.name);
+      setMessage("");
+    } catch (error) {
+      setPhoto(null);
+      setPhotoSource(null);
+      setPhotoName("");
+      setMessage(error.message);
+    }
   }
 
   async function save(event) {
@@ -135,7 +142,7 @@ function Profile({ profile, onUpdate, onPasswordChanged }) {
     }
   }
 
-  return <section className="dashboard-card profile-card"><span>Employee profile</span><div className="profile-summary">{profile.employee_photo ? <img className="profile-photo" src={profile.employee_photo} alt="Employee" /> : <div className="profile-placeholder">{profile.first_name[0]}{profile.last_name[0]}</div>}<div><h2>{profile.first_name} {profile.last_name}</h2><p>{profile.employee_code} · {profile.work_email}</p></div></div>{message && <p className="inline-message profile-message">{message}</p>}{editing ? <form className="profile-form" onSubmit={save}><label>Personal email<input type="email" required value={form.personal_email} onChange={(event) => setForm({ ...form, personal_email: event.target.value })} /></label><label>Phone number<input type="tel" required minLength="8" maxLength="20" value={form.phone_number} onChange={(event) => setForm({ ...form, phone_number: event.target.value })} /></label><label>Residential address<textarea required maxLength="500" value={form.residential_address} onChange={(event) => setForm({ ...form, residential_address: event.target.value })} /></label><div className="photo-upload-field"><span>Replace photo</span><label className="file-picker"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => readPhoto(event.target.files[0])} /><span className="file-picker-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.5V19a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2.5M8 9l4-4 4 4M12 5v11" /></svg>Choose image</span><span className="file-picker-name">{photoName || "PNG, JPG or WebP"}</span></label></div>{photoSource && <PhotoEditor source={photoSource} onChange={setPhoto} />}<div className="form-actions"><button className="icon-button" type="submit"><svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5z" /><path d="M8 3v6h8V3M8 21v-8h8v8" /></svg>Save profile</button><button type="button" className="secondary" onClick={() => setEditing(false)}>Cancel</button></div></form> : <div className="profile-details"><div><small>Personal email</small><strong>{profile.personal_email}</strong></div><div><small>Phone</small><strong>{profile.phone_number}</strong></div><div className="full-detail"><small>Residential address</small><strong>{profile.residential_address}</strong></div><button className="icon-button" onClick={beginEdit}><svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>Edit profile</button></div>}<PasswordChange onChanged={onPasswordChanged} /></section>;
+  return <section className="dashboard-card profile-card"><span>Employee profile</span><div className="profile-summary">{profile.employee_photo ? <img className="profile-photo" src={profile.employee_photo} alt="Employee" /> : <div className="profile-placeholder">{profile.first_name[0]}{profile.last_name[0]}</div>}<div><h2>{profile.first_name} {profile.last_name}</h2><p>{profile.employee_code} · {profile.work_email}</p></div></div>{message && <p className="inline-message profile-message">{message}</p>}{editing ? <form className="profile-form" onSubmit={save}><label>Personal email<input type="email" required value={form.personal_email} onChange={(event) => setForm({ ...form, personal_email: event.target.value })} /></label><label>Phone number<input type="tel" required minLength="8" maxLength="20" value={form.phone_number} onChange={(event) => setForm({ ...form, phone_number: event.target.value })} /></label><label>Residential address<textarea required maxLength="500" value={form.residential_address} onChange={(event) => setForm({ ...form, residential_address: event.target.value })} /></label><div className="photo-upload-field"><span>Replace photo</span><label className="file-picker"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { void readPhoto(event.target.files[0]); }} /><span className="file-picker-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.5V19a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2.5M8 9l4-4 4 4M12 5v11" /></svg>Choose image</span><span className="file-picker-name">{photoName || "PNG, JPG or WebP"}</span></label></div>{photoSource && <PhotoEditor source={photoSource} onChange={setPhoto} />}<div className="form-actions"><button className="icon-button" type="submit"><svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5z" /><path d="M8 3v6h8V3M8 21v-8h8v8" /></svg>Save profile</button><button type="button" className="secondary" onClick={() => setEditing(false)}>Cancel</button></div></form> : <div className="profile-details"><div><small>Personal email</small><strong>{profile.personal_email}</strong></div><div><small>Phone</small><strong>{profile.phone_number}</strong></div><div className="full-detail"><small>Residential address</small><strong>{profile.residential_address}</strong></div><button className="icon-button" onClick={beginEdit}><svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>Edit profile</button></div>}<PasswordChange onChanged={onPasswordChanged} /></section>;
 }
 
 

@@ -111,6 +111,7 @@ function HRChatbotWidget({ role }) {
     const response = await apiFetch("/chatbot/message/stream", {
       method: "POST",
       headers: {
+        Accept: "text/event-stream",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ session_id: activeSession, question: text }),

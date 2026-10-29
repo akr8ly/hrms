@@ -1,6 +1,9 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException
+import logging
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -8,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.auth_api import router as auth_router
 from app.security import auth_settings
+from app.security_middleware import ApplicationSecurityMiddleware
 from app.chatbot_api import router as chatbot_router
 from app.database import get_db
 from app.dependencies import require_roles
@@ -26,13 +30,28 @@ from app.schemas.office_address import OfficeAddressCreate, OfficeAddressRead, O
 from app.user_api import router as user_router
 
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="HRMS API")
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_validation_error(_request: Request, _error: RequestValidationError):
+    return JSONResponse(status_code=422, content={"detail": "Request data is invalid"})
+
+
+@app.exception_handler(Exception)
+async def handle_unexpected_error(request: Request, error: Exception):
+    logger.exception("Unhandled request error for %s", request.url.path, exc_info=error)
+    return JSONResponse(status_code=500, content={"detail": "An unexpected error occurred"})
+
+app.add_middleware(ApplicationSecurityMiddleware, settings=auth_settings)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=auth_settings.frontend_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Accept", "Authorization", "Content-Type", "Origin"],
 )
 masters = APIRouter(tags=["Masters"], dependencies=[Depends(require_roles("admin", "employee", "query"))])
 

@@ -4,6 +4,10 @@ export const API_BASE_URL =
 export function apiFetch(path, options = {}) {
   return fetch(`${API_BASE_URL}${path}`, {
     ...options,
+    headers: {
+      Accept: "application/json",
+      ...options.headers,
+    },
     credentials: "include",
   });
 }
