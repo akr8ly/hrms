@@ -1,5 +1,7 @@
 from pwdlib import PasswordHash
 from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from uuid import uuid4
 
 import jwt
 from pydantic import Field, SecretStr
@@ -19,6 +21,7 @@ def verify_password(password: str, stored_hash: str) -> bool:
 def normalize_security_answer(answer: str) -> str:
     return " ".join(answer.casefold().strip().split())
 
+
 class AuthSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -35,6 +38,11 @@ class AuthSettings(BaseSettings):
     login_max_attempts: int = Field(default=5, ge=3, le=20)
     login_window_seconds: int = Field(default=900, ge=60, le=86_400)
     login_lockout_seconds: int = Field(default=900, ge=60, le=86_400)
+    auth_session_idle_seconds: int = Field(default=900, ge=300, le=86_400)
+    redis_url: str = "redis://127.0.0.1:6379/0"
+    redis_key_prefix: str = Field(default="hrms", pattern=r"^[A-Za-z0-9_-]+$")
+    redis_connect_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
+    redis_operation_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
 
     @property
     def frontend_origins(self) -> list[str]:
@@ -47,17 +55,36 @@ class AuthSettings(BaseSettings):
 
 auth_settings = AuthSettings()
 
-def create_access_token(user_id: int) -> str:
-    now = datetime.now(timezone.utc)
 
+@dataclass(frozen=True, slots=True)
+class IssuedAccessToken:
+    value: str
+    token_id: str
+    expires_at: int
+
+
+def issue_access_token(user_id: int, session_version: int = 0) -> IssuedAccessToken:
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=30)
+    token_id = uuid4().hex
     payload = {
         "sub": str(user_id),
         "iat": now,
-        "exp": now + timedelta(minutes=30),
+        "exp": expires_at,
+        "jti": token_id,
+        "sv": session_version,
     }
-
-    return jwt.encode(
-        payload,
-        auth_settings.jwt_secret_key.get_secret_value(),
-        algorithm="HS256",
+    return IssuedAccessToken(
+        value=jwt.encode(
+            payload,
+            auth_settings.jwt_secret_key.get_secret_value(),
+            algorithm="HS256",
+        ),
+        token_id=token_id,
+        expires_at=int(expires_at.timestamp()),
     )
+
+
+def create_access_token(user_id: int, session_version: int = 0) -> str:
+    """Compatibility helper for callers that only need the encoded token."""
+    return issue_access_token(user_id, session_version).value

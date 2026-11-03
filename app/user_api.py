@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.audit import record_audit_event
 from app.dependencies import require_roles
 from app.models.role import Role
 from app.models.user import User
@@ -57,16 +58,18 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/users/{user_id}/approve", response_model=UserRead)
-def approve_user(user_id: int, db: Session = Depends(get_db)):
+def approve_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_roles("admin"))):
     user = get_user(user_id, db)
     user.approval_status = "approved"
     db.commit()
     db.refresh(user)
+    record_audit_event(db, event_type="admin.user.approved", actor_user_id=current_user.id, details={"target_user_id": user.id})
+    db.commit()
     return user
 
 
 @router.post("/users/{user_id}/reject", response_model=UserRead)
-def reject_user(user_id: int, db: Session = Depends(get_db)):
+def reject_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_roles("admin"))):
     user = get_user(user_id, db)
     role = db.get(Role, user.role_id)
     if role is not None and role.name == "admin":
@@ -74,11 +77,13 @@ def reject_user(user_id: int, db: Session = Depends(get_db)):
     user.approval_status = "rejected"
     db.commit()
     db.refresh(user)
+    record_audit_event(db, event_type="admin.user.rejected", actor_user_id=current_user.id, details={"target_user_id": user.id})
+    db.commit()
     return user
 
 
 @router.patch("/users/{user_id}", response_model=UserRead)
-def update_user_access(user_id: int, data: UserAccessUpdate, db: Session = Depends(get_db)):
+def update_user_access(user_id: int, data: UserAccessUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_roles("admin"))):
     if db.get_bind().dialect.name == "postgresql":
         db.execute(text("SELECT pg_advisory_xact_lock(72411921)"))
     user = get_user(user_id, db)
@@ -104,4 +109,6 @@ def update_user_access(user_id: int, data: UserAccessUpdate, db: Session = Depen
         db.rollback()
         raise HTTPException(409, "Employee is already linked to another account") from None
     db.refresh(user)
+    record_audit_event(db, event_type="admin.user.access_updated", actor_user_id=current_user.id, details={"target_user_id": user.id, "changed_fields": sorted(data.model_fields_set)})
+    db.commit()
     return user

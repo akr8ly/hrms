@@ -10,6 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.chatbot.agent_executor import answer_with_policy_agent
+from app.chatbot.moderation import MODERATION_FALLBACK, PROMPT_INJECTION_FALLBACK, UNSAFE_MODEL_OUTPUT_FALLBACK
+from app.audit import record_audit_event
 from app.chatbot.config import chatbot_settings
 from app.chatbot.memory import (
     SensitiveMemoryError,
@@ -86,6 +88,18 @@ def _translate_session_error(error: Exception) -> HTTPException:
     return HTTPException(422, str(error))
 
 
+def _record_chat_audit(db: Session, *, user_id: int, answer: str) -> None:
+    event_type = "chatbot.message.completed"
+    if answer == PROMPT_INJECTION_FALLBACK:
+        event_type = "chatbot.guardrail.prompt_injection"
+    elif answer == MODERATION_FALLBACK:
+        event_type = "chatbot.guardrail.content_moderation"
+    elif answer == UNSAFE_MODEL_OUTPUT_FALLBACK:
+        event_type = "chatbot.guardrail.output_sanitized"
+    record_audit_event(db, event_type=event_type, actor_user_id=user_id)
+    db.commit()
+
+
 def _sse_event(event: str, data: object) -> str:
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     return f"event: {event}\ndata: {payload}\n\n"
@@ -130,6 +144,7 @@ def send_message(
         raise _translate_session_error(error) from None
     except (SensitiveMemoryError, ValueError) as error:
         raise _translate_session_error(error) from None
+    _record_chat_audit(db, user_id=current_user.id, answer=str(result["answer"]))
     return result
 
 
@@ -182,6 +197,7 @@ def stream_message(
             )
             return
 
+        _record_chat_audit(db, user_id=current_user.id, answer=str(result["answer"]))
         for chunk in _answer_chunks(str(result["answer"])):
             yield _sse_event("token", {"text": chunk})
         yield _sse_event(

@@ -1,4 +1,5 @@
 from app.models.base import Base
+from app.models.audit_event import AuditEvent
 from app.models.department import Department
 from app.models.designation import Designation
 from app.models.division import Division
@@ -10,6 +11,7 @@ from app.models.user import User
 
 __all__ = [
   "Base",
+  "AuditEvent",
   "Division",
   "Department",
   "Designation",

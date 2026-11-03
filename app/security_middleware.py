@@ -1,20 +1,43 @@
+import logging
+
 from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.audit import record_audit_event
+from app.database import SessionLocal
+
 from app.security import AuthSettings
+
+
+logger = logging.getLogger(__name__)
 
 
 class ApplicationSecurityMiddleware(BaseHTTPMiddleware):
     """Apply transport, media-type, cache, and browser security controls."""
 
     _documentation_paths = {"/docs", "/redoc", "/openapi.json"}
-    _protected_prefixes = ("/auth", "/employees", "/admin", "/chatbot")
+    _master_prefixes = ("/divisions", "/departments", "/designations", "/locations", "/office-addresses")
+    _protected_prefixes = ("/auth", "/employees", "/admin", "/chatbot", *_master_prefixes)
     _unsafe_methods = {"POST", "PUT", "PATCH"}
 
     def __init__(self, app, settings: AuthSettings):
         super().__init__(app)
         self.settings = settings
+
+    def _record_master_audit_event(self, *, path: str, actor_user_id: int | None) -> None:
+        try:
+            with SessionLocal() as db:
+                record_audit_event(
+                    db,
+                    event_type="admin.master.changed",
+                    actor_user_id=actor_user_id,
+                    details={"path": path},
+                )
+                db.commit()
+        except Exception:
+            logger.exception("Could not persist master-data audit event")
 
     def _is_secure(self, request: Request) -> bool:
         if request.url.scheme == "https":
@@ -45,6 +68,17 @@ class ApplicationSecurityMiddleware(BaseHTTPMiddleware):
                 return JSONResponse(status_code=406, content={"detail": "Requested response format is not supported"})
 
         response = await call_next(request)
+
+        if (
+            path.startswith(self._master_prefixes)
+            and request.method in {"POST", "PATCH", "DELETE"}
+            and response.status_code < 400
+        ):
+            await run_in_threadpool(
+                self._record_master_audit_event,
+                path=path,
+                actor_user_id=getattr(request.state, "authenticated_user_id", None),
+            )
 
         if self._is_api_path(path):
             response.headers["Content-Security-Policy"] = "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"

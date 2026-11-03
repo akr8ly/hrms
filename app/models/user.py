@@ -44,6 +44,8 @@ class User(Base):
         nullable=False,
     )
 
+    session_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
     employee_id: Mapped[int | None] = mapped_column(
         ForeignKey("employees.id"),
         unique=True,

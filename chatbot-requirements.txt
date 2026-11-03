@@ -8,3 +8,4 @@ chromadb>=1,<2
 sentence-transformers>=5,<6
 langchain-openai>=1,<2
 langchain-ollama>=1,<2
+redis>=5,<7

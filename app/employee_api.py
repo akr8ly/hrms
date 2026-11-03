@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.audit import record_audit_event
 from app.encryption import get_employee_key_ring
 from app.models import Department, Designation, Division, Employee, Location, OfficeAddress
 from app.schemas.employee import (
@@ -111,7 +112,7 @@ def storage_values(payload, ring):
     dependencies=[Depends(require_roles("admin"))],
 )
 
-def create_employee(data: EmployeeCreate, db: Session = Depends(get_db), ring=Depends(get_employee_key_ring)):
+def create_employee(data: EmployeeCreate, db: Session = Depends(get_db), ring=Depends(get_employee_key_ring), current_user: User = Depends(require_roles("admin"))):
     lock_employee_writes(db)
     validate_references(db, data.model_dump())
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -119,6 +120,8 @@ def create_employee(data: EmployeeCreate, db: Session = Depends(get_db), ring=De
     db.add(employee)
     commit(db)
     db.refresh(employee)
+    record_audit_event(db, event_type="employee.created", actor_user_id=current_user.id, details={"employee_id": employee.id})
+    db.commit()
     return read_response(employee, ring)
 
 
@@ -230,6 +233,8 @@ def update_employee(
     employee.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     commit(db)
     db.refresh(employee)
+    record_audit_event(db, event_type="employee.updated", actor_user_id=current_user.id, details={"employee_id": employee.id, "changed_fields": sorted(changes)})
+    db.commit()
     return read_response(employee, ring)
 
 
@@ -239,7 +244,7 @@ def update_employee(
     dependencies=[Depends(require_roles("admin"))],
 )
 
-def delete_employee(employee_id: int, db: Session = Depends(get_db)):
+def delete_employee(employee_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_roles("admin"))):
     lock_employee_writes(db)
     employee = find_employee(db, employee_id)
     if db.scalar(select(Employee.id).where(Employee.reporting_manager_id == employee_id).limit(1)):
@@ -247,4 +252,6 @@ def delete_employee(employee_id: int, db: Session = Depends(get_db)):
     employee.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
     employee.updated_at = employee.deleted_at
     commit(db)
+    record_audit_event(db, event_type="employee.deleted", actor_user_id=current_user.id, details={"employee_id": employee.id})
+    db.commit()
     return Response(status_code=204)

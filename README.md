@@ -57,4 +57,16 @@ Run Uvicorn without its identifying server header:
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --no-server-header
 ```
 
-The API applies CSP, frame protection, MIME-sniffing protection, private no-store caching for protected responses, restricted CORS methods and headers, JSON media-type checks, and a five-attempt/15-minute login lockout. The lockout store is in-process for one API instance; move it to Redis before scaling to multiple instances.
+The API applies CSP, frame protection, MIME-sniffing protection, private no-store caching for protected responses, restricted CORS methods and headers, JSON media-type checks, Redis-backed login lockouts, token revocation, 15-minute idle sessions, and Redis-backed chatbot session memory. Redis must be running before users log in or use the chatbot; the API fails closed if the security-state store is unavailable.
+
+
+## Redis for local development
+
+Redis is required for authentication sessions, login lockouts, token revocation, and chatbot sessions. Start it before running the API, then use the REDIS_URL value in .env.example. Docker example:
+
+    docker run --name hrms-redis -p 6379:6379 -d redis:7-alpine
+
+Stop and remove the local container when finished:
+
+    docker stop hrms-redis
+    docker rm hrms-redis

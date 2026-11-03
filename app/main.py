@@ -13,7 +13,8 @@ from app.auth_api import router as auth_router
 from app.security import auth_settings
 from app.security_middleware import ApplicationSecurityMiddleware
 from app.chatbot_api import router as chatbot_router
-from app.database import get_db
+from app.database import SessionLocal, get_db
+from app.audit import record_audit_event
 from app.dependencies import require_roles
 from app.employee_api import router as employee_router
 from app.models.department import Department
@@ -36,7 +37,19 @@ app = FastAPI(title="HRMS API")
 
 
 @app.exception_handler(RequestValidationError)
-async def handle_validation_error(_request: Request, _error: RequestValidationError):
+async def handle_validation_error(request: Request, error: RequestValidationError):
+    photo_rejected = any("employee_photo" in str(item.get("loc", ())) for item in error.errors())
+    if photo_rejected:
+        try:
+            with SessionLocal() as db:
+                record_audit_event(
+                    db,
+                    event_type="employee.photo.rejected",
+                    details={"path": request.url.path},
+                )
+                db.commit()
+        except Exception:
+            logger.exception("Could not persist employee photo rejection audit event")
     return JSONResponse(status_code=422, content={"detail": "Request data is invalid"})
 
 
