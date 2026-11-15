@@ -95,6 +95,10 @@ class AuthorizationRegressionTests(unittest.TestCase):
         headers, _ = self.authenticate_as("query")
         self.assertEqual(self.client.patch("/employees/11", headers=headers, json={"personal_email": "person@example.com"}).status_code, 403)
 
+    def test_query_role_cannot_create_chat_sessions(self):
+        headers, _ = self.authenticate_as("query")
+        self.assertEqual(self.client.post("/chatbot/sessions", headers=headers).status_code, 403)
+
     def test_chat_history_rejects_a_different_users_session(self):
         headers, _ = self.authenticate_as("employee", user_id=100, employee_id=10)
         foreign_session = chat_memory.create_chat_session(user_id=101, user_role="employee")

@@ -13,6 +13,9 @@ from app.auth_api import router as auth_router
 from app.security import auth_settings
 from app.security_middleware import ApplicationSecurityMiddleware
 from app.chatbot_api import router as chatbot_router
+from app.org_structure_api import router as organization_router
+from app.expense_api import router as expense_router
+from app.query_api import router as query_router
 from app.database import SessionLocal, get_db
 from app.audit import record_audit_event
 from app.dependencies import require_roles
@@ -304,3 +307,6 @@ app.include_router(user_router)
 app.include_router(employee_router)
 app.include_router(auth_router)
 app.include_router(chatbot_router)
+app.include_router(organization_router)
+app.include_router(expense_router)
+app.include_router(query_router)

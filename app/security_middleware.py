@@ -19,7 +19,7 @@ class ApplicationSecurityMiddleware(BaseHTTPMiddleware):
 
     _documentation_paths = {"/docs", "/redoc", "/openapi.json"}
     _master_prefixes = ("/divisions", "/departments", "/designations", "/locations", "/office-addresses")
-    _protected_prefixes = ("/auth", "/employees", "/admin", "/chatbot", *_master_prefixes)
+    _protected_prefixes = ("/auth", "/employees", "/admin", "/chatbot", "/organization", "/expenses", "/queries", *_master_prefixes)
     _unsafe_methods = {"POST", "PUT", "PATCH"}
 
     def __init__(self, app, settings: AuthSettings):

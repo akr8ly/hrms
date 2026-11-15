@@ -8,5 +8,6 @@ cryptography>=44
 alembic>=1.13,<2
 pwdlib[argon2]>=0.2,<1
 PyJWT>=2.10,<3
+reportlab>=4.2,<5
 
 redis>=5,<7

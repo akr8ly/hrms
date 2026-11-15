@@ -54,6 +54,7 @@ class UserRead(BaseModel):
 
 class CurrentUserRead(UserRead):
     role: Literal["admin", "employee", "query"]
+    is_reporting_manager: bool = False
 
 class UserLogin(BaseModel):
     model_config = ConfigDict(extra="forbid")

@@ -30,7 +30,7 @@ from app.chatbot.prompts import (
     NO_POLICY_ANSWER,
     get_agent_system_prompt,
 )
-from app.chatbot.tools import get_policy_tools
+from app.chatbot.tools import CATEGORY_ALIASES, get_policy_tools
 
 
 POLICY_ID_PATTERN = re.compile(r"\[(POL-[A-Z]+-\d{3})\]")
@@ -44,6 +44,13 @@ _ANALYTICS_PATTERN = re.compile(
     r"\b(?:headcount|employee count|employees? (?:are|work|exist)|"
     r"how many employees|workforce|staff count|division[- ]wise|"
     r"department[- ]wise|designation[- ]wise|location[- ]wise)\b",
+    re.IGNORECASE,
+)
+_CATEGORY_LIST_PATTERN = re.compile(
+    r"\b(?:list|show|tell|give|what are|which are)\b.*\b(?:all|available|every)\b.*"
+    r"\b(?:policies|policy sections|sections)\b|"
+    r"\b(?:all|available|every)\b.*\b(?:policies|policy sections|sections)\b|"
+    r"\b(?:all|every)\s+of\s+(?:them|these|those)\b",
     re.IGNORECASE,
 )
 
@@ -114,6 +121,81 @@ def _current_policy_retrieval_question(
     if not prior_question:
         return question
     return f"{prior_question}\nFollow-up: {question}"
+
+
+def _category_from_text(text: str) -> str | None:
+    """Resolve a known policy category from a user-visible phrase."""
+    normalized = " ".join(text.casefold().replace("-", " ").replace("_", " ").split())
+    for alias, category in sorted(CATEGORY_ALIASES.items(), key=lambda item: len(item[0]), reverse=True):
+        if re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", normalized):
+            return category
+    return None
+
+
+def _requested_category_listing(
+    question: str,
+    history: list[BaseMessage],
+) -> str | None:
+    """Resolve explicit or referential requests to list an entire category."""
+    if not _CATEGORY_LIST_PATTERN.search(question):
+        return None
+
+    category = _category_from_text(question)
+    if category is not None:
+        return category
+
+    documents_by_id = {
+        str(document.metadata["policy_id"]): document
+        for document in load_policy_documents()
+    }
+    for message in reversed(history):
+        text = _message_text(message)
+        for policy_id in POLICY_ID_PATTERN.findall(text):
+            document = documents_by_id.get(policy_id)
+            if document is not None:
+                return str(document.metadata["category"])
+        category = _category_from_text(text)
+        if category is not None:
+            return category
+    return None
+
+
+def _category_listing_answer(category: str) -> dict[str, object]:
+    """Build a deterministic complete list without relying on an LLM tool choice."""
+    documents = sorted(
+        (
+            document
+            for document in load_policy_documents()
+            if str(document.metadata["category"]) == category
+        ),
+        key=lambda document: str(document.metadata["policy_id"]),
+    )
+    if not documents:
+        return {
+            "answer": NO_POLICY_ANSWER,
+            "sources": [],
+            "tools_used": ["get_hr_policy_category"],
+        }
+
+    category_title = str(documents[0].metadata["category_title"])
+    entries = "\n".join(
+        f"- [{document.metadata['policy_id']}] {document.metadata['title']}"
+        for document in documents
+    )
+    return {
+        "answer": sanitize_output_text(
+            f"Available {category_title} policy sections:\n{entries}"
+        ),
+        "sources": [
+            {
+                "policy_id": str(document.metadata["policy_id"]),
+                "title": str(document.metadata["title"]),
+                "category": str(document.metadata["category"]),
+            }
+            for document in documents
+        ],
+        "tools_used": ["get_hr_policy_category"],
+    }
 
 
 def _grounded_policy_answer(
@@ -327,7 +409,10 @@ def answer_with_policy_agent(
     )
     history = prepared_messages[:-1]
 
-    if _is_admin_analytics_question(cleaned_question, role):
+    requested_category = _requested_category_listing(cleaned_question, history)
+    if requested_category is not None:
+        result = _category_listing_answer(requested_category)
+    elif _is_admin_analytics_question(cleaned_question, role):
         # Analytics is the only path that needs the tool-calling agent. Do not
         # give it old policy answers, which cannot be evidence for a report.
         try:

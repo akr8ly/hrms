@@ -73,7 +73,8 @@ class ChatHistoryRead(BaseModel):
 
 def _current_role(db: Session, user: User) -> str:
     role = db.get(Role, user.role_id)
-    if role is None or role.name not in {"admin", "employee", "query"}:
+    # Query users submit support applications instead and cannot access chat.
+    if role is None or role.name not in {"admin", "employee"}:
         raise HTTPException(403, "Your account has no supported chatbot role")
     return role.name
 

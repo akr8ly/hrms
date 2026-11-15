@@ -202,6 +202,15 @@ def get_my_account(current_user: User = Depends(get_current_user), db: Session =
     role = db.get(Role, current_user.role_id)
     if role is None:
         raise HTTPException(500, "User role is not configured")
+    is_reporting_manager = False
+    if role.name == "employee" and current_user.employee_id is not None:
+        is_reporting_manager = db.scalar(
+            select(Employee.id)
+            .where(Employee.reporting_manager_id == current_user.employee_id)
+            .where(Employee.deleted_at.is_(None))
+            .where(Employee.employment_status != "exited")
+            .limit(1)
+        ) is not None
     return CurrentUserRead(id=current_user.id, username=current_user.username, role_id=current_user.role_id,
                            employee_id=current_user.employee_id, approval_status=current_user.approval_status,
-                           role=role.name)
+                           role=role.name, is_reporting_manager=is_reporting_manager)

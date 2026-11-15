@@ -36,6 +36,15 @@ from app.schemas.office_address import (
     OfficeAddressRead,
     OfficeAddressUpdate,
 )
+from app.schemas.expense import (
+    ExpenseApprovalRead,
+    ExpenseClaimCreate,
+    ExpenseClaimRead,
+    ExpenseClaimUpdate,
+    ExpenseDecision,
+    ExpenseEntryInput,
+    ExpenseEntryRead,
+)
 
 __all__ = [
     "DepartmentBase",
@@ -64,4 +73,11 @@ __all__ = [
     "OfficeAddressCreate",
     "OfficeAddressRead",
     "OfficeAddressUpdate",
+    "ExpenseClaimCreate",
+    "ExpenseClaimUpdate",
+    "ExpenseClaimRead",
+    "ExpenseEntryInput",
+    "ExpenseEntryRead",
+    "ExpenseDecision",
+    "ExpenseApprovalRead",
 ]

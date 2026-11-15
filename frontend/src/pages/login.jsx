@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { apiFetch } from "../api";
+import { apiFetch, resetSessionExpiryNotification } from "../api";
 
 function Login() {
   const [form, setForm] = useState({
@@ -42,6 +42,7 @@ function Login() {
         return;
       }
 
+      resetSessionExpiryNotification();
       navigate("/dashboard");
     } catch {
       setError("Cannot connect to the HRMS API");
@@ -70,7 +71,7 @@ function Login() {
           <p className="auth-subtitle">Enter your account details to continue.</p>
 
           {error && <p className="error-message">{error}</p>}
-          {location.state?.message && <p className="success-message">{location.state.message}</p>}
+          {location.state?.message && <p className="session-message" role="status">{location.state.message}</p>}
 
           <label htmlFor="username">Username</label>
           <input

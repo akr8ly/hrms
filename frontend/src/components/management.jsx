@@ -194,7 +194,10 @@ export function EmployeesPage({ token, role }) {
     event.preventDefault();
     const payload = {};
     for (const [key, value] of Object.entries(form)) {
-      if (editingId && value === "") continue;
+      // An empty reporting manager is meaningful: it explicitly promotes the
+      // employee to the top of their reporting branch. Other empty fields are
+      // omitted during edits so required employee data is never cleared.
+      if (editingId && value === "" && key !== "reporting_manager_id") continue;
       payload[key] = key.endsWith("_id") ? (value === "" ? null : Number(value)) : value;
     }
     if (photo) payload.employee_photo = photo;

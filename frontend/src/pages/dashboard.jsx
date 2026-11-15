@@ -5,6 +5,10 @@ import HRChatbotWidget from "../components/chatbot";
 import { apiFetch } from "../api";
 import { readPhotoFile } from "../photoUpload";
 import { EmployeesPage, MastersPage, UsersPage } from "../components/management";
+import OrganisationPage from "../components/organization";
+import TeamPage from "../components/team";
+import ExpensesPage from "../components/expenses";
+import QueryRequestsPage from "../components/queryRequests";
 
 
 function toPositiveEmployeeId(value) {
@@ -26,7 +30,7 @@ function Dashboard() {
       try {
         const response = await apiFetch("/auth/me");
         if (!response.ok) {
-          navigate("/login");
+          if (response.status !== 401) setError("Unable to verify your HRMS session.");
           return;
         }
         setUser(await response.json());
@@ -68,13 +72,13 @@ function Dashboard() {
 
   return (
     <div className="app-layout">
-      <Sidebar role={user.role} collapsed={collapsed} activeItem={activeItem} onSelect={setActiveItem} onToggle={() => setCollapsed(!collapsed)} />
+      <Sidebar role={user.role} isReportingManager={user.is_reporting_manager} collapsed={collapsed} activeItem={activeItem} onSelect={setActiveItem} onToggle={() => setCollapsed(!collapsed)} />
       <main>
         <div className="page-header"><div><h1>HRMS Dashboard</h1><p>Welcome, {user.username}. Your role is {user.role}.</p></div><button className="logout-button" onClick={logout}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /></svg><span>Logout</span></button></div>
         {error && <p className="error-message">{error}</p>}
-        {activeItem === "Employees" ? <EmployeesPage role={user.role} /> : activeItem === "Masters" && user.role === "admin" ? <MastersPage /> : activeItem === "Users" && user.role === "admin" ? <UsersPage /> : activeItem === "My Profile" ? <Profile profile={profile} onUpdate={setProfile} onPasswordChanged={logout} /> : <section className="dashboard-card"><span>{activeItem}</span><h2>{activeItem}</h2><p>{sectionDescription(user.role, activeItem)}</p></section>}
+        {activeItem === "Organisation" && ["admin", "employee"].includes(user.role) ? <OrganisationPage canManage={user.role === "admin"} /> : activeItem === "My Team" && user.role === "employee" && user.is_reporting_manager ? <TeamPage /> : activeItem === "Expenses" ? <ExpensesPage user={user} /> : activeItem === "Queries" && user.role === "query" ? <QueryRequestsPage /> : activeItem === "Queries" && user.role === "admin" ? <QueryRequestsPage adminMode /> : activeItem === "Employees" ? <EmployeesPage role={user.role} /> : activeItem === "Masters" && user.role === "admin" ? <MastersPage /> : activeItem === "Users" && user.role === "admin" ? <UsersPage /> : activeItem === "My Profile" ? <Profile profile={profile} onUpdate={setProfile} onPasswordChanged={logout} /> : <section className="dashboard-card"><span>{activeItem}</span><h2>{activeItem}</h2><p>{sectionDescription(user.role, activeItem)}</p></section>}
       </main>
-      <HRChatbotWidget role={user.role} />
+      {user.role !== "query" && <HRChatbotWidget role={user.role} />}
     </div>
   );
 }
