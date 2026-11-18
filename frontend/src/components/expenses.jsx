@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
 import { apiFetch } from "../api";
 import { readPhotoFile } from "../photoUpload";
@@ -40,6 +40,8 @@ function ActionIcon({ name }) {
     approve: <path d="m5 12 4 4L19 6" />,
     reject: <><path d="m6 6 12 12M18 6 6 18" /></>,
     reimburse: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M7 10h10M7 14h5" /><path d="m16 3 2 2-2 2" /></>,
+    view: <><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.5" /></>,
+    download: <><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 20h14" /></>,
   };
   return <svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
@@ -60,6 +62,13 @@ function claimEntriesPayload(entries) {
 
 export default function ExpensesPage({ user }) {
   const [claims, setClaims] = useState([]);
+  const [claimOffset, setClaimOffset] = useState(0);
+  const [hasMoreClaims, setHasMoreClaims] = useState(false);
+  const [activeTab, setActiveTab] = useState("claims");
+  const [expenseQueries, setExpenseQueries] = useState([]);
+  const [queryOffset, setQueryOffset] = useState(0);
+  const [hasMoreQueries, setHasMoreQueries] = useState(false);
+  const [expandedQueryId, setExpandedQueryId] = useState(null);
   const [costCenter, setCostCenter] = useState("");
   const [currency, setCurrency] = useState("INR");
   const [entries, setEntries] = useState([blankEntry()]);
@@ -69,18 +78,42 @@ export default function ExpensesPage({ user }) {
 
   const total = useMemo(() => entries.reduce((sum, entry) => sum + (Number(entry.requested_amount) || 0), 0), [entries]);
 
-  async function load() {
+  const loadClaims = useCallback(async (nextOffset = 0) => {
+    setLoading(true);
     try {
-      setClaims(await request("/expenses/claims"));
+      const data = await request(`/expenses/claims?limit=20&offset=${nextOffset}`);
+      setClaims((current) => nextOffset === 0 ? data : [...current, ...data]);
+      setClaimOffset(nextOffset + data.length);
+      setHasMoreClaims(data.length === 20);
       setMessage("");
     } catch (error) {
       setMessage(error.message || "Expense claims could not be loaded.");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { void load(); }, []);
+  const loadExpenseQueries = useCallback(async (bucket, nextOffset = 0) => {
+    setLoading(true);
+    try {
+      const data = await request(`/queries/admin/expense-requests?bucket=${bucket}&limit=20&offset=${nextOffset}`);
+      setExpenseQueries((current) => nextOffset === 0 ? data : [...current, ...data]);
+      setQueryOffset(nextOffset + data.length);
+      setHasMoreQueries(data.length === 20);
+      setMessage("");
+    } catch (error) {
+      setMessage(error.message || "Expense queries could not be loaded.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadClaims(); }, [loadClaims]);
+  useEffect(() => {
+    if (user.role === "admin" && activeTab !== "claims") {
+      void loadExpenseQueries(activeTab === "approved_queries" ? "approved" : "pending");
+    }
+  }, [activeTab, loadExpenseQueries, user.role]);
 
   function changeEntry(index, field, value) {
     setEntries((current) => current.map((entry, itemIndex) => itemIndex === index ? { ...entry, [field]: value } : entry));
@@ -135,6 +168,25 @@ export default function ExpensesPage({ user }) {
     } catch (error) { setMessage(error.message || "Claim action could not be completed."); }
   }
 
+  async function downloadQueryReport(queryId) {
+    setMessage("");
+    try {
+      const response = await apiFetch(`/queries/admin/requests/${queryId}/report.pdf`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "Query PDF could not be downloaded");
+      }
+      const file = URL.createObjectURL(await response.blob());
+      const download = document.createElement("a");
+      download.href = file;
+      download.download = `hrms-query-${queryId}.pdf`;
+      download.click();
+      URL.revokeObjectURL(file);
+    } catch (error) {
+      setMessage(error.message || "Query PDF could not be downloaded.");
+    }
+  }
+
   function decide(claim, level, approval) {
     const remarks = approval ? "" : window.prompt("Reason for rejection:");
     if (remarks === null) return;
@@ -142,15 +194,18 @@ export default function ExpensesPage({ user }) {
   }
 
   const canCreate = user.role === "employee";
+  const isExpenseQueryTab = activeTab !== "claims";
+  const queryBucket = activeTab === "approved_queries" ? "approved" : "pending";
   return <section className="management-page expense-page">
     <div className="section-heading"><div><span>Finance</span><h2>Expense reimbursements</h2><p>Submit up to five cost entries per claim. Claims move through L1 manager review, then L2 finance approval.</p></div></div>
     {message && <p className="inline-message">{message}</p>}
-    {canCreate && <form className="expense-form" onSubmit={createClaim}>
+    {user.role === "admin" && <div className="expense-tabs" role="tablist" aria-label="Expense administration views"><button type="button" role="tab" aria-selected={activeTab === "claims"} className={activeTab === "claims" ? "active" : ""} onClick={() => setActiveTab("claims")}>Claims</button><button type="button" role="tab" aria-selected={activeTab === "pending_queries"} className={activeTab === "pending_queries" ? "active" : ""} onClick={() => setActiveTab("pending_queries")}>Pending queries</button><button type="button" role="tab" aria-selected={activeTab === "approved_queries"} className={activeTab === "approved_queries" ? "active" : ""} onClick={() => setActiveTab("approved_queries")}>Approved queries</button></div>}
+    {!isExpenseQueryTab && canCreate && <form className="expense-form" onSubmit={createClaim}>
       <div className="expense-form-header"><strong>{editingId ? `Editing draft #${editingId}` : "New claim"}</strong><span>Requested total: {currency} {total.toFixed(2)}</span></div>
       <div className="expense-claim-fields"><label>Cost centre<select required value={costCenter} onChange={(event) => setCostCenter(event.target.value)}><option value="" disabled>Select a cost centre</option>{costCenters.map((costCenterOption) => <option key={costCenterOption.value} value={costCenterOption.value}>{costCenterOption.label}</option>)}</select></label><label>Currency<input required minLength="3" maxLength="3" value={currency} onChange={(event) => setCurrency(event.target.value.toUpperCase())} /></label></div>
       {entries.map((entry, index) => <div className="expense-entry" key={index}><strong>Entry {index + 1}</strong><label>Date<input type="date" required value={entry.expense_date} onChange={(event) => changeEntry(index, "expense_date", event.target.value)} /></label><label>Category<select value={entry.category} onChange={(event) => changeEntry(index, "category", event.target.value)}>{categories.map((category) => <option key={category} value={category}>{category.replaceAll("_", " ")}</option>)}</select></label><label>Description<input required minLength="3" maxLength="300" value={entry.description} onChange={(event) => changeEntry(index, "description", event.target.value)} /></label><label>Amount<input required type="number" min="0.01" step="0.01" value={entry.requested_amount} onChange={(event) => changeEntry(index, "requested_amount", event.target.value)} /></label><div className="expense-receipt"><span>Receipt (optional)</span><label className="file-picker"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { void chooseReceipt(index, event.target.files[0]); }} /><span className="file-picker-button">Attach image</span><span className="file-picker-name">{entry.receipt_name || "PNG, JPG or WebP"}</span></label></div>{entries.length > 1 && <button type="button" className="secondary" onClick={() => setEntries((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>}</div>)}
       <div className="form-actions">{entries.length < 5 && <button type="button" className="secondary" onClick={() => setEntries((current) => [...current, blankEntry()])}>Add entry ({entries.length}/5)</button>}<button type="submit">{editingId ? "Save changes" : "Save draft"}</button>{editingId && <button type="button" className="secondary" onClick={resetForm}>Cancel edit</button>}</div>
     </form>}
-    <div className="table-wrap data-table-wrap expenses-table-wrap"><table className="management-table data-table expenses-table"><thead><tr><th>Claim</th><th>Cost centre</th><th>Requested</th><th>Status</th><th>Approvals</th><th>Actions</th></tr></thead><tbody>{loading ? <tr><td colSpan="6">Loading claims…</td></tr> : claims.length === 0 ? <tr className="empty-row"><td colSpan="6">No expense claims yet.</td></tr> : claims.map((claim) => { const mine = claim.claimant_employee_id === user.employee_id; const editable = mine && claim.status === "draft"; const l1 = user.role === "employee" && !mine && claim.status === "submitted"; const l2 = user.role === "admin" && claim.status === "l1_approved"; return <tr key={claim.id}><td><strong>{claim.id}</strong></td><td>{claim.cost_center}</td><td>{claim.currency} {Number(claim.requested_total).toFixed(2)}</td><td><Status value={claim.status} /></td><td>L1: {claim.l1_approved_total ?? "—"}<br />L2: {claim.l2_approved_total ?? "—"}</td><td><div className="row-actions">{editable && <><IconAction icon="edit" label="Edit draft" onClick={() => editClaim(claim)} /><IconAction icon="delete" label="Delete draft" danger onClick={() => { void deleteDraft(claim); }} /><IconAction icon="submit" label="Submit claim" onClick={() => { void action(claim, "/submit"); }} /></>}{l1 && <><IconAction icon="approve" label="L1 approve" onClick={() => decide(claim, 1, true)} /><IconAction icon="reject" label="L1 reject" danger onClick={() => decide(claim, 1, false)} /></>}{l2 && <><IconAction icon="approve" label="L2 approve" onClick={() => decide(claim, 2, true)} /><IconAction icon="reject" label="L2 reject" danger onClick={() => decide(claim, 2, false)} /></>}{user.role === "admin" && claim.status === "l2_approved" && <IconAction icon="reimburse" label="Mark reimbursed" onClick={() => { void action(claim, "/reimburse"); }} />}</div></td></tr>; })}</tbody></table></div>
+    {!isExpenseQueryTab ? <><div className="table-wrap data-table-wrap expenses-table-wrap"><table className="management-table data-table expenses-table"><thead><tr><th>Claim</th><th>Cost centre</th><th>Requested</th><th>Status</th><th>Approvals</th><th>Actions</th></tr></thead><tbody>{loading ? <tr><td colSpan="6">Loading claims…</td></tr> : claims.length === 0 ? <tr className="empty-row"><td colSpan="6">No expense claims yet.</td></tr> : claims.map((claim) => { const mine = claim.claimant_employee_id === user.employee_id; const editable = mine && claim.status === "draft"; const l1 = user.role === "employee" && !mine && claim.status === "submitted"; const l2 = user.role === "admin" && claim.status === "l1_approved"; return <tr key={claim.id}><td><strong>{claim.id}</strong></td><td>{claim.cost_center}</td><td>{claim.currency} {Number(claim.requested_total).toFixed(2)}</td><td><Status value={claim.status} /></td><td>L1: {claim.l1_approved_total ?? "—"}<br />L2: {claim.l2_approved_total ?? "—"}</td><td><div className="row-actions">{editable && <><IconAction icon="edit" label="Edit draft" onClick={() => editClaim(claim)} /><IconAction icon="delete" label="Delete draft" danger onClick={() => { void deleteDraft(claim); }} /><IconAction icon="submit" label="Submit claim" onClick={() => { void action(claim, "/submit"); }} /></>}{l1 && <><IconAction icon="approve" label="L1 approve" onClick={() => decide(claim, 1, true)} /><IconAction icon="reject" label="L1 reject" danger onClick={() => decide(claim, 1, false)} /></>}{l2 && <><IconAction icon="approve" label="L2 approve" onClick={() => decide(claim, 2, true)} /><IconAction icon="reject" label="L2 reject" danger onClick={() => decide(claim, 2, false)} /></>}{user.role === "admin" && claim.status === "l2_approved" && <IconAction icon="reimburse" label="Mark reimbursed" onClick={() => { void action(claim, "/reimburse"); }} />}</div></td></tr>; })}</tbody></table></div>{hasMoreClaims && <div className="load-more-wrap"><button type="button" className="secondary-button" onClick={() => { void loadClaims(claimOffset); }}>Load more</button></div>}</> : <><div className="expense-query-heading"><strong>{queryBucket === "pending" ? "Pending expense queries" : "Approved expense queries"}</strong><span>Read-only requests linked to reimbursement claims.</span></div><div className="table-wrap data-table-wrap expenses-table-wrap"><table className="management-table data-table expense-query-table"><thead><tr><th>Sender</th><th>Subject</th><th>Claim</th><th>Claim status</th><th>Submitted</th><th aria-label="Actions" /></tr></thead><tbody>{loading ? <tr><td colSpan="6">Loading expense queries…</td></tr> : expenseQueries.length === 0 ? <tr className="empty-row"><td colSpan="6">No {queryBucket} expense queries are available.</td></tr> : expenseQueries.map((query) => <Fragment key={query.id}><tr><td>{query.sender}</td><td>{query.subject}</td><td>{query.expense_claim_id ? <><strong>{query.expense_claim_id}</strong><small>{query.cost_center || ""}</small></> : "Not linked"}</td><td>{query.claim_status ? <Status value={query.claim_status} /> : <span className="query-reference-empty">Awaiting claim reference</span>}</td><td>{new Date(query.created_at).toLocaleDateString()}<small>{new Date(query.created_at).toLocaleTimeString()}</small></td><td><div className="row-actions"><IconAction icon="view" label={expandedQueryId === query.id ? "Hide details" : "View details"} onClick={() => setExpandedQueryId((current) => current === query.id ? null : query.id)} /><IconAction icon="download" label="Download PDF" onClick={() => { void downloadQueryReport(query.id); }} /></div></td></tr>{expandedQueryId === query.id && <tr className="query-details-row"><td colSpan="6"><div><span>Details</span><p>{query.description}</p></div></td></tr>}</Fragment>)}</tbody></table></div>{hasMoreQueries && <div className="load-more-wrap"><button type="button" className="secondary-button" onClick={() => { void loadExpenseQueries(queryBucket, queryOffset); }}>Load more</button></div>}</>}
   </section>;
 }

@@ -15,6 +15,9 @@ class QueryRequest(Base):
     subject: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     related_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Expense queries may optionally be tied to a claim.  Keeping this nullable
+    # preserves existing, general reimbursement enquiries as pending review.
+    expense_claim_id: Mapped[int | None] = mapped_column(ForeignKey("expense_claims.id"), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="submitted", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

@@ -1030,6 +1030,16 @@ td small { display: block; margin-top: 3px; color: #94a3b8; }
 
 .organization-page { max-width: 1200px; }
 .expense-page { max-width: 1280px; }
+.expense-tabs { display: flex; gap: 8px; margin: 0 0 18px; border-bottom: 1px solid #dbe3ee; }
+.expense-tabs button { margin: 0 0 -1px; padding: 9px 13px; color: #64748b; font-weight: 700; background: transparent; border: 0; border-bottom: 2px solid transparent; cursor: pointer; }
+.expense-tabs button:hover { color: #1e3a5f; }
+.expense-tabs button.active { color: #075985; border-bottom-color: #2563eb; }
+.expense-query-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin: 0 0 10px; color: #172554; }
+.expense-query-heading span { color: #64748b; font-size: 13px; }
+.expense-query-table { min-width: 820px; }
+.expense-query-table td { vertical-align: top; }
+.expense-query-table td small { display: block; margin-top: 3px; color: #64748b; }
+.load-more-wrap { display: flex; justify-content: center; padding-top: 14px; }
 .expense-form { display: grid; gap: 14px; padding: 20px; margin-bottom: 22px; background: #f8fafc; border: 1px solid #dbe3ee; border-radius: 14px; }
 .expense-form-header { display: flex; justify-content: space-between; gap: 14px; color: #172554; }
 .expense-form-header span { color: #356899; font-weight: 700; }
@@ -1097,6 +1107,11 @@ td small { display: block; margin-top: 3px; color: #94a3b8; }
 @media (max-width: 900px) {
   .expense-entry { grid-template-columns: 1fr 1fr; }
   .expense-entry strong { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .expense-tabs { gap: 2px; overflow-x: auto; }
+  .expense-tabs button { padding: 9px 10px; font-size: 12px; white-space: nowrap; }
+  .expense-query-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
 }
 .organization-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 24px; }
 .secondary-button, .primary-button { min-height: 38px; padding: 9px 13px; font-weight: 700; border-radius: 8px; cursor: pointer; }

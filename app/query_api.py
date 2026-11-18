@@ -4,8 +4,8 @@ from datetime import datetime, timezone
 from io import BytesIO
 from xml.sax.saxutils import escape
 
-from fastapi import APIRouter, Depends, HTTPException, Response
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -16,9 +16,10 @@ from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Space
 from app.audit import record_audit_event
 from app.database import get_db
 from app.dependencies import require_roles
+from app.models.expense_claim import ExpenseClaim
 from app.models.query_request import QueryRequest
 from app.models.user import User
-from app.schemas.query_request import AdminQueryRequestRead, QueryRequestCreate, QueryRequestRead
+from app.schemas.query_request import AdminExpenseQueryRequestRead, AdminQueryRequestRead, QueryRequestCreate, QueryRequestRead
 
 
 router = APIRouter(prefix="/queries", tags=["Queries"])
@@ -29,17 +30,25 @@ QUERY_CATEGORY_LABELS = {
     "reimbursement_report": "Reimbursement report",
     "llm_calls": "HR assistant / LLM",
 }
+APPROVED_EXPENSE_STATUSES = {"l2_approved", "reimbursed"}
+DEFAULT_PAGE_SIZE = 20
+MAX_PAGE_SIZE = 50
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _admin_rows(db: Session):
-    return db.execute(
+def _admin_rows(db: Session, include_expense_queries: bool = False):
+    statement = (
         select(QueryRequest, User.username)
         .join(User, User.id == QueryRequest.requester_user_id)
         .order_by(QueryRequest.updated_at.desc(), QueryRequest.id.desc())
+    )
+    if not include_expense_queries:
+        statement = statement.where(QueryRequest.category != "reimbursement_report")
+    return db.execute(
+        statement
     ).all()
 
 
@@ -61,6 +70,7 @@ def _admin_read(request: QueryRequest, sender: str) -> dict:
         "subject": request.subject,
         "description": request.description,
         "related_reference": request.related_reference,
+        "expense_claim_id": request.expense_claim_id,
         "status": request.status,
         "created_at": request.created_at,
         "updated_at": request.updated_at,
@@ -70,6 +80,11 @@ def _admin_read(request: QueryRequest, sender: str) -> dict:
 
 def _pdf_text(value: object) -> str:
     return escape(str(value)).replace("\n", "<br/>")
+
+
+def _expense_query_bucket(claim_status: str | None) -> str:
+    """Classify linked queries without mutating the user-submitted request."""
+    return "approved" if claim_status in APPROVED_EXPENSE_STATUSES else "pending"
 
 
 def build_query_report(rows, generated_at: datetime | None = None) -> bytes:
@@ -130,6 +145,8 @@ def build_query_report(rows, generated_at: datetime | None = None) -> bytes:
 
 @router.get("/requests", response_model=list[QueryRequestRead])
 def list_my_query_requests(
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("query")),
 ):
@@ -138,6 +155,8 @@ def list_my_query_requests(
         select(QueryRequest)
         .where(QueryRequest.requester_user_id == current_user.id)
         .order_by(QueryRequest.updated_at.desc(), QueryRequest.id.desc())
+        .offset(offset)
+        .limit(limit)
     ).all()
 
 
@@ -148,6 +167,8 @@ def create_query_request(
     current_user: User = Depends(require_roles("query")),
 ):
     """Submit a structured request without exposing employee data or raw LLM logs."""
+    if data.expense_claim_id is not None and db.get(ExpenseClaim, data.expense_claim_id) is None:
+        raise HTTPException(422, "The related expense claim was not found")
     now = _now()
     request = QueryRequest(
         requester_user_id=current_user.id,
@@ -155,6 +176,7 @@ def create_query_request(
         subject=data.subject,
         description=data.description,
         related_reference=data.related_reference,
+        expense_claim_id=data.expense_claim_id,
         status="submitted",
         created_at=now,
         updated_at=now,
@@ -174,11 +196,59 @@ def create_query_request(
 
 @router.get("/admin/requests", response_model=list[AdminQueryRequestRead])
 def list_admin_query_requests(
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     _current_user: User = Depends(require_roles("admin")),
 ):
     """Review every query without changing the original user-submitted content."""
-    return [_admin_read(request, sender) for request, sender in _admin_rows(db)]
+    rows = db.execute(
+        select(QueryRequest, User.username)
+        .join(User, User.id == QueryRequest.requester_user_id)
+        .where(QueryRequest.category != "reimbursement_report")
+        .order_by(QueryRequest.updated_at.desc(), QueryRequest.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return [_admin_read(request, sender) for request, sender in rows]
+
+
+@router.get("/admin/expense-requests", response_model=list[AdminExpenseQueryRequestRead])
+def list_admin_expense_query_requests(
+    bucket: str = Query("pending", pattern="^(pending|approved)$"),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("admin")),
+):
+    """Read reimbursement queries beside the claim state; admin cannot edit either."""
+    statement = (
+        select(QueryRequest, User.username, ExpenseClaim)
+        .join(User, User.id == QueryRequest.requester_user_id)
+        .outerjoin(ExpenseClaim, ExpenseClaim.id == QueryRequest.expense_claim_id)
+        .where(QueryRequest.category == "reimbursement_report")
+    )
+    if bucket == "approved":
+        statement = statement.where(ExpenseClaim.status.in_(APPROVED_EXPENSE_STATUSES))
+    else:
+        statement = statement.where(
+            or_(ExpenseClaim.id.is_(None), ~ExpenseClaim.status.in_(APPROVED_EXPENSE_STATUSES))
+        )
+    rows = db.execute(
+        statement
+        .order_by(QueryRequest.updated_at.desc(), QueryRequest.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return [
+        {
+            **_admin_read(request, sender),
+            "claim_status": claim.status if claim is not None else None,
+            "cost_center": claim.cost_center if claim is not None else None,
+            "currency": claim.currency if claim is not None else None,
+        }
+        for request, sender, claim in rows
+    ]
 
 
 @router.get("/admin/report.pdf", response_class=Response)

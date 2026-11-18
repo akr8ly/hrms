@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
@@ -130,6 +130,8 @@ def _replace_entries(db: Session, claim: ExpenseClaim, data: ExpenseClaimCreate 
 
 @router.get("/claims", response_model=list[ExpenseClaimRead])
 def list_expense_claims(
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     ring=Depends(get_employee_key_ring),
     current_user: User = Depends(get_current_user),
@@ -137,7 +139,7 @@ def list_expense_claims(
     role = _role_name(db, current_user)
     statement = select(ExpenseClaim).order_by(ExpenseClaim.updated_at.desc(), ExpenseClaim.id.desc())
     if role == "admin":
-        claims = db.scalars(statement.where(ExpenseClaim.status != "draft")).all()
+        claims = db.scalars(statement.where(ExpenseClaim.status != "draft").offset(offset).limit(limit)).all()
     else:
         manager = _linked_employee_or_403(db, current_user)
         claims = db.scalars(
@@ -151,7 +153,7 @@ def list_expense_claims(
                         ),
                     ),
                 )
-            )
+            ).offset(offset).limit(limit)
         ).all()
     return [_read_claim(db, claim, ring) for claim in claims]
 
